@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}客户端列表{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="m-0">客户端列表</h5>
+  <a class="btn btn-sm btn-primary" href="{{ url_for('admin_client_new') }}">新增客户端</a>
+!</div>
+<form class="row g-2 mb-3" method="get">
+  <div class="col-auto">
+    <input class="form-control" name="q" value="{{ q }}" placeholder="搜索 客户名/ClientID/IP">
+  </div>
+  <div class="col-auto">
+    <button class="btn btn-outline-secondary">搜索</button>
+  </div>
+</form>
+<div class="table-responsive">
+  <table class="table table-sm table-striped align-middle">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>ClientID</th>
+        <th>客户名</th>
+        <th>IP</th>
+        <th>硬件ID</th>
+        <th>启用</th>
+        <th>到期</th>
+        <th>请求数</th>
+        <th>最后请求</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for c in clients %}
+      <tr>
+        <td>{{ c[0] }}</td>
+        <td class="text-truncate" style="max-width:180px">{{ c[1] }}</td>
+        <td>{{ c[2] }}</td>
+        <td>{{ c[3] or '-' }}</td>
+        <td class="text-truncate" style="max-width:180px">{{ c[4] or '-' }}</td>
+        <td>{% if c[5] %}<span class="badge bg-success">启用</span>{% else %}<span class="badge bg-secondary">禁用</span>{% endif %}</td>
+        <td>{{ c[7] or '-' }}</td>
+        <td>{{ c[8] }}</td>
+        <td>{{ c[9] or '-' }}</td>
+        <td>
+          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_client_edit', cid=c[0]) }}">编辑</a>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+
+

@@ -1,0 +1,45 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        cd client
+        pip install -r requirements_modern.txt
+        pip install pyinstaller pyautogui pywinauto opencv-python pandas openpyxl pyperclip
+    
+    - name: Build EXE
+      run: |
+        cd client
+        pyinstaller --onefile --windowed --name="智能选品系统" --add-data="../rpa/rpa_controller.py;rpa" --add-data="../rpa/templates;rpa/templates" --hidden-import=customtkinter --hidden-import=PIL --hidden-import=pandas --hidden-import=openpyxl --hidden-import=pyautogui --hidden-import=pywinauto --hidden-import=cv2 --hidden-import=requests --hidden-import=cryptography --clean modern_client.py
+    
+    - name: Upload EXE
+      uses: actions/upload-artifact@v3
+      with:
+        name: 智能选品系统
+        path: client/dist/*.exe
+        retention-days: 30
+    
+    - name: Display build info
+      run: |
+        cd client/dist
+        dir
+

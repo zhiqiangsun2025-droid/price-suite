@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}IP 白名单{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="m-0">ClientID: {{ client_id }} 的 IP 白名单</h5>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('admin_clients_page') }}">返回客户端</a>
+!</div>
+<form method="post" class="row g-3 mb-3">
+  <div class="col-md-6">
+    <label class="form-label">新增 IP / 网段</label>
+    <input class="form-control" name="ip_cidr" placeholder="例如 1.2.3.4 或 1.2.3.0/24">
+  </div>
+  <div class="col-md-2 align-self-end"><button class="btn btn-primary">添加</button></div>
+</form>
+<div class="table-responsive">
+  <table class="table table-sm table-striped">
+    <thead><tr><th>ID</th><th>IP/网段</th><th>创建时间</th></tr></thead>
+    <tbody>
+      {% for i in ips %}
+      <tr><td>{{ i[0] }}</td><td>{{ i[2] }}</td><td>{{ i[3] }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+
+

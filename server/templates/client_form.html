@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}{{ '编辑' if client else '新增' }}客户端{% endblock %}
+{% block content %}
+<h5 class="mb-3">{{ '编辑' if client else '新增' }}客户端</h5>
+<form method="post" class="row g-3">
+  <div class="col-md-4">
+    <label class="form-label">客户名称</label>
+    <input class="form-control" name="client_name" value="{{ client[2] if client else '' }}" required>
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">授权固定IP（可空）</label>
+    <input class="form-control" name="ip_address" value="{{ client[3] if client else '' }}" placeholder="如 1.2.3.4">
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">硬件ID（可空）</label>
+    <input class="form-control" name="hardware_id" value="{{ client[4] if client else '' }}">
+  </div>
+  {% if client %}
+  <div class="col-md-3">
+    <label class="form-label">是否启用</label>
+    <div class="form-check form-switch mt-2">
+      <input class="form-check-input" type="checkbox" name="is_active" {% if client[5] %}checked{% endif %}>
+    </div>
+  </div>
+  <div class="col-md-5">
+    <label class="form-label">到期时间（YYYY-MM-DD HH:MM:SS，可空）</label>
+    <input class="form-control" name="expires_at" value="{{ client[7] if client else '' }}">
+  </div>
+  {% else %}
+  <div class="col-md-4">
+    <label class="form-label">授权天数</label>
+    <input class="form-control" name="expires_days" value="365">
+  </div>
+  {% endif %}
+  <div class="col-12">
+    <button class="btn btn-primary">保存</button>
+    <a class="btn btn-outline-secondary" href="{{ url_for('admin_clients_page') }}">返回</a>
+  </div>
+</form>
+{% endblock %}
+
+
+

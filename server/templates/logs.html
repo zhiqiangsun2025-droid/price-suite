@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}请求日志{% endblock %}
+{% block content %}
+<h5 class="mb-3">请求日志</h5>
+<form class="row g-2 mb-3" method="get">
+  <div class="col-auto">
+    <input class="form-control" name="client_id" value="{{ client_id or '' }}" placeholder="按 ClientID 过滤">
+  </div>
+  <div class="col-auto">
+    <button class="btn btn-outline-secondary">筛选</button>
+  </div>
+</form>
+<div class="table-responsive">
+  <table class="table table-sm table-striped">
+    <thead>
+      <tr>
+        <th>ID</th><th>ClientID</th><th>IP</th><th>类型</th><th>成功</th><th>错误</th><th>时间</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in logs %}
+      <tr>
+        <td>{{ r[0] }}</td>
+        <td class="text-truncate" style="max-width:220px">{{ r[1] }}</td>
+        <td>{{ r[2] }}</td>
+        <td>{{ r[3] }}</td>
+        <td>{% if r[4] %}<span class="badge bg-success">Y</span>{% else %}<span class="badge bg-danger">N</span>{% endif %}</td>
+        <td class="text-truncate" style="max-width:260px">{{ r[5] or '-' }}</td>
+        <td>{{ r[6] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+
+
