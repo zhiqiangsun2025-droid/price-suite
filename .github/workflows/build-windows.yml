@@ -3,8 +3,6 @@ name: Build Windows EXE
 on:
   push:
     branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -13,35 +11,34 @@ jobs:
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     
     - name: Setup Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: '3.11'
     
     - name: Install dependencies
       run: |
-        cd client
-        pip install customtkinter requests pillow cryptography pandas openpyxl pyperclip
-        pip install pyinstaller pyautogui pywinauto opencv-python jieba scikit-learn
+        python -m pip install --upgrade pip
+        pip install customtkinter==5.2.1 requests pillow cryptography pandas openpyxl pyperclip
+        pip install pyinstaller
     
-    - name: Build EXE
+    - name: Build EXE (Simple Version)
       run: |
         cd client
-        pyinstaller --onefile --windowed --name="智能选品系统" --hidden-import=customtkinter --hidden-import=PIL --hidden-import=pandas --hidden-import=openpyxl --hidden-import=pyautogui --hidden-import=pywinauto --hidden-import=cv2 --hidden-import=requests --hidden-import=cryptography --hidden-import=jieba --hidden-import=sklearn --clean modern_client.py
+        pyinstaller --onefile --noconsole --name=智能选品系统 modern_client.py
+    
+    - name: List build output
+      run: |
+        dir client\dist
     
     - name: Upload EXE
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: 智能选品系统
-        path: client/dist/*.exe
-        retention-days: 30
-    
-    - name: Display build info
-      run: |
-        cd client/dist
-        dir
+        path: client/dist/智能选品系统.exe
+        retention-days: 90
 
 
 
