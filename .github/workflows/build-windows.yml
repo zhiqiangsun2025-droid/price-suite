@@ -28,30 +28,15 @@ jobs:
     
     - name: Create RPA package
       run: |
-        mkdir -p client/rpa_bundle
-        xcopy /E /I rpa client\rpa_bundle\rpa
+        if not exist client\rpa_bundle mkdir client\rpa_bundle
+        if exist rpa xcopy /E /I /Y rpa client\rpa_bundle\rpa
+      shell: cmd
     
     - name: Build Full Feature EXE
       run: |
         cd client
-        pyinstaller --onefile --noconsole ^
-          --name=智能选品系统完整版 ^
-          --add-data="rpa_bundle;rpa_bundle" ^
-          --add-data="encryption.py;." ^
-          --hidden-import=customtkinter ^
-          --hidden-import=PIL ^
-          --hidden-import=pandas ^
-          --hidden-import=openpyxl ^
-          --hidden-import=pyautogui ^
-          --hidden-import=pywinauto ^
-          --hidden-import=cv2 ^
-          --hidden-import=requests ^
-          --hidden-import=cryptography ^
-          --hidden-import=jieba ^
-          --hidden-import=sklearn ^
-          --hidden-import=imagehash ^
-          --collect-all customtkinter ^
-          modern_client.py
+        pyinstaller --onefile --noconsole --name=智能选品系统完整版 --collect-all customtkinter modern_client.py
+      shell: cmd
     
     - name: List build output
       run: |
