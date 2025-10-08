@@ -23,13 +23,13 @@ jobs:
     - name: Install dependencies
       run: |
         cd client
-        pip install -r requirements_modern.txt
-        pip install pyinstaller pyautogui pywinauto opencv-python pandas openpyxl pyperclip
+        pip install customtkinter requests pillow cryptography pandas openpyxl pyperclip
+        pip install pyinstaller pyautogui pywinauto opencv-python jieba scikit-learn
     
     - name: Build EXE
       run: |
         cd client
-        pyinstaller --onefile --windowed --name="智能选品系统" --add-data="../rpa/rpa_controller.py;rpa" --add-data="../rpa/templates;rpa/templates" --hidden-import=customtkinter --hidden-import=PIL --hidden-import=pandas --hidden-import=openpyxl --hidden-import=pyautogui --hidden-import=pywinauto --hidden-import=cv2 --hidden-import=requests --hidden-import=cryptography --clean modern_client.py
+        pyinstaller --onefile --windowed --name="智能选品系统" --hidden-import=customtkinter --hidden-import=PIL --hidden-import=pandas --hidden-import=openpyxl --hidden-import=pyautogui --hidden-import=pywinauto --hidden-import=cv2 --hidden-import=requests --hidden-import=cryptography --hidden-import=jieba --hidden-import=sklearn --clean modern_client.py
     
     - name: Upload EXE
       uses: actions/upload-artifact@v3
@@ -42,4 +42,6 @@ jobs:
       run: |
         cd client/dist
         dir
+
+
 
