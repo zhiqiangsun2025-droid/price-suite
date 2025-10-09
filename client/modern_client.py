@@ -105,8 +105,11 @@ class SmartSelectionApp(ctk.CTk):
                     config['hardware_id'] = self.hardware_id
                     config['is_active'] = self.is_active
                     
-                    if self.is_active == 0 and 'trial_start_time' not in config:
-                        config['trial_start_time'] = time.time()
+                    # 确保试用期开始时间正确设置
+                    if self.is_active == 0:
+                        if 'trial_start_time' not in config:
+                            config['trial_start_time'] = time.time()
+                        self.trial_start_time = config['trial_start_time']
                     
                     save_config(config)
                     
@@ -114,8 +117,7 @@ class SmartSelectionApp(ctk.CTk):
                         # 已授权
                         self.create_main_ui(trial_mode=False)
                     elif self.is_active == 0:
-                        # 试用模式
-                        self.trial_start_time = config.get('trial_start_time', time.time())
+                        # 试用模式 - trial_start_time已经设置好了
                         elapsed = time.time() - self.trial_start_time
                         remaining = TRIAL_DURATION - elapsed
                         
