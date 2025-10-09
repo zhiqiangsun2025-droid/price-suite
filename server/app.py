@@ -290,44 +290,63 @@ def api_active_rules():
 
 @app.route('/api/register', methods=['POST'])
 def register_client():
-    """注册新客户端"""
+    """客户端自动注册（首次启动时调用）"""
     data = request.json
-    admin_key = data.get('admin_key')
+    hardware_id = data.get('hardware_id')
+    ip_address = request.remote_addr
     
-    # 验证管理员密钥
-    if admin_key != SECRET_KEY:
+    if not hardware_id:
         return jsonify({
             'success': False,
-            'error': '管理员密钥错误'
-        }), 403
-    
-    client_name = data.get('client_name')
-    ip_address = data.get('ip_address')
-    hardware_id = data.get('hardware_id')
-    expires_days = data.get('expires_days', 365)
-    
-    # 生成客户端ID
-    client_id = hashlib.md5(f"{client_name}{hardware_id}{time.time()}".encode()).hexdigest()
-    
-    # 计算过期时间
-    from datetime import timedelta
-    expires_at = (datetime.now() + timedelta(days=expires_days)).strftime('%Y-%m-%d %H:%M:%S')
+            'error': '缺少硬件ID'
+        }), 400
     
     try:
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
+        
+        # 检查是否已注册
+        c.execute('SELECT * FROM authorizations WHERE hardware_id=?', (hardware_id,))
+        existing = c.fetchone()
+        
+        if existing:
+            # 已注册，返回现有信息
+            client_id = existing[1]
+            is_active = existing[5]
+            expires_at = existing[7]
+            
+            # 更新最后请求时间和IP
+            c.execute('UPDATE authorizations SET ip_address=? WHERE hardware_id=?', 
+                     (ip_address, hardware_id))
+            conn.commit()
+            conn.close()
+            
+            return jsonify({
+                'success': True,
+                'client_id': client_id,
+                'is_active': is_active,
+                'expires_at': expires_at,
+                'message': '已找到现有授权' if is_active == 1 else '等待管理员审核'
+            })
+        
+        # 新注册：生成客户端ID
+        client_id = hashlib.md5(f"{hardware_id}{ip_address}{time.time()}".encode()).hexdigest()
+        client_name = f"客户端_{hardware_id[:8]}"
+        
+        # 插入待审核记录（is_active=0）
         c.execute('''
-            INSERT INTO authorizations (client_id, client_name, ip_address, hardware_id, expires_at)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (client_id, client_name, ip_address, hardware_id, expires_at))
+            INSERT INTO authorizations (client_id, client_name, ip_address, hardware_id, is_active)
+            VALUES (?, ?, ?, ?, 0)
+        ''', (client_id, client_name, ip_address, hardware_id))
         conn.commit()
         conn.close()
         
         return jsonify({
             'success': True,
             'client_id': client_id,
-            'expires_at': expires_at,
-            'message': '客户端注册成功'
+            'is_active': 0,
+            'expires_at': None,
+            'message': '注册成功，等待管理员审核（可试用1小时）'
         })
     except Exception as e:
         return jsonify({
@@ -655,6 +674,32 @@ def admin_client_edit(cid):
         return redirect(url_for('admin_clients_page'))
     conn.close()
     return render_template('client_form.html', client=client)
+
+@app.route('/admin/clients/<int:cid>/approve')
+@admin_required
+def admin_client_approve(cid):
+    """批准客户端"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    from datetime import timedelta
+    expires_at = (datetime.now() + timedelta(days=365)).strftime('%Y-%m-%d %H:%M:%S')
+    c.execute('UPDATE authorizations SET is_active=1, expires_at=? WHERE id=?', (expires_at, cid))
+    conn.commit()
+    conn.close()
+    flash('✓ 已批准客户端，有效期1年', 'success')
+    return redirect(url_for('admin_clients_page'))
+
+@app.route('/admin/clients/<int:cid>/reject')
+@admin_required
+def admin_client_reject(cid):
+    """拒绝客户端"""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute('UPDATE authorizations SET is_active=-1 WHERE id=?', (cid,))
+    conn.commit()
+    conn.close()
+    flash('✗ 已拒绝客户端', 'warning')
+    return redirect(url_for('admin_clients_page'))
 
 @app.route('/admin/logs')
 @admin_required

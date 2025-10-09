@@ -1,10 +1,10 @@
 {% extends 'base.html' %}
-{% block title %}客户端列表{% endblock %}
+{% block title %}客户端管理{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h5 class="m-0">客户端列表</h5>
-  <a class="btn btn-sm btn-primary" href="{{ url_for('admin_client_new') }}">新增客户端</a>
-!</div>
+  <h5 class="m-0">📱 客户端管理</h5>
+  <a class="btn btn-primary" href="{{ url_for('admin_client_new') }}">+ 新增客户端</a>
+</div>
 <form class="row g-2 mb-3" method="get">
   <div class="col-auto">
     <input class="form-control" name="q" value="{{ q }}" placeholder="搜索 客户名/ClientID/IP">
@@ -14,42 +14,89 @@
   </div>
 </form>
 <div class="table-responsive">
-  <table class="table table-sm table-striped align-middle">
-    <thead>
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
       <tr>
-        <th>ID</th>
-        <th>ClientID</th>
-        <th>客户名</th>
-        <th>IP</th>
-        <th>硬件ID</th>
-        <th>启用</th>
-        <th>到期</th>
-        <th>请求数</th>
-        <th>最后请求</th>
-        <th></th>
+        <th style="width: 40px;">ID</th>
+        <th style="width: 280px;">客户端ID</th>
+        <th style="width: 120px;">客户名称</th>
+        <th style="width: 120px;">IP地址</th>
+        <th style="width: 120px;">硬件ID</th>
+        <th style="width: 90px;">状态</th>
+        <th style="width: 140px;">到期时间</th>
+        <th style="width: 70px;">请求数</th>
+        <th style="min-width: 300px;">操作</th>
       </tr>
     </thead>
     <tbody>
     {% for c in clients %}
       <tr>
         <td>{{ c[0] }}</td>
-        <td class="text-truncate" style="max-width:180px">{{ c[1] }}</td>
-        <td>{{ c[2] }}</td>
-        <td>{{ c[3] or '-' }}</td>
-        <td class="text-truncate" style="max-width:180px">{{ c[4] or '-' }}</td>
-        <td>{% if c[5] %}<span class="badge bg-success">启用</span>{% else %}<span class="badge bg-secondary">禁用</span>{% endif %}</td>
-        <td>{{ c[7] or '-' }}</td>
-        <td>{{ c[8] }}</td>
-        <td>{{ c[9] or '-' }}</td>
         <td>
-          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_client_edit', cid=c[0]) }}">编辑</a>
+          <div class="d-flex align-items-center">
+            <code style="font-size: 11px; word-break: break-all; flex: 1;">{{ c[1] }}</code>
+            <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyText('{{ c[1] }}'); return false;" title="复制客户端ID">
+              📋
+            </button>
+          </div>
+        </td>
+        <td>{{ c[2] or '-' }}</td>
+        <td><small>{{ c[3] or '任意' }}</small></td>
+        <td>
+          <small><code style="font-size: 10px;">{{ c[4][:12] if c[4] else '-' }}...</code></small>
+        </td>
+        <td>
+          {% if c[5] == 0 %}
+            <span class="badge bg-warning text-dark">待审核</span>
+          {% elif c[5] == 1 %}
+            <span class="badge bg-success">已批准</span>
+          {% elif c[5] == -1 %}
+            <span class="badge bg-danger">已拒绝</span>
+          {% else %}
+            <span class="badge bg-secondary">禁用</span>
+          {% endif %}
+        </td>
+        <td><small>{{ c[7] or '永久' }}</small></td>
+        <td><span class="badge bg-info">{{ c[8] }}</span></td>
+        <td>
+          {% if c[5] == 0 %}
+            <a class="btn btn-sm btn-success me-1" href="{{ url_for('admin_client_approve', cid=c[0]) }}" onclick="return confirm('确认批准该客户端？')">
+              ✓ 批准
+            </a>
+            <a class="btn btn-sm btn-danger me-1" href="{{ url_for('admin_client_reject', cid=c[0]) }}" onclick="return confirm('确认拒绝该客户端？')">
+              ✗ 拒绝
+            </a>
+          {% endif %}
+          <a class="btn btn-sm btn-outline-secondary me-1" href="{{ url_for('admin_client_edit', cid=c[0]) }}">编辑</a>
+          <a class="btn btn-sm btn-outline-info" href="{{ url_for('admin_logs', client_id=c[1]) }}">日志</a>
         </td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
+
+<style>
+.table-responsive {
+  min-height: 300px;
+}
+</style>
+
+<script>
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    // 创建提示元素
+    const toast = document.createElement('div');
+    toast.className = 'alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3';
+    toast.style.zIndex = '9999';
+    toast.innerHTML = '✓ 已复制客户端ID';
+    document.body.appendChild(toast);
+    
+    // 3秒后移除
+    setTimeout(() => toast.remove(), 3000);
+  }).catch(err => {
+    alert('复制失败：' + err);
+  });
+}
+</script>
 {% endblock %}
-
-
-

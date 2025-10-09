@@ -2,10 +2,16 @@
 {% block title %}{{ '编辑' if client else '新增' }}客户端{% endblock %}
 {% block content %}
 <h5 class="mb-3">{{ '编辑' if client else '新增' }}客户端</h5>
+{% if client %}
+<div class="alert alert-info">
+  <strong>客户端ID：</strong> <code>{{ client[1] }}</code> 
+  <button class="btn btn-sm btn-outline-primary ms-2" onclick="navigator.clipboard.writeText('{{ client[1] }}'); alert('已复制！');">复制</button>
+</div>
+{% endif %}
 <form method="post" class="row g-3">
   <div class="col-md-4">
-    <label class="form-label">客户名称</label>
-    <input class="form-control" name="client_name" value="{{ client[2] if client else '' }}" required>
+    <label class="form-label">客户名称（备注用）</label>
+    <input class="form-control" name="client_name" value="{{ client[2] if client else '' }}" placeholder="如：测试客户、张三" required>
   </div>
   <div class="col-md-4">
     <label class="form-label">授权固定IP（可空）</label>
