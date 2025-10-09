@@ -11,6 +11,9 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 import time
 import json
+import base64
+from io import BytesIO
+from PIL import Image
 
 class DouyinScraperV2:
     def __init__(self, headless=True):
@@ -19,6 +22,7 @@ class DouyinScraperV2:
         self.driver = None
         self.wait = None
         self.login_status = "init"  # init/need_code/logged_in/failed
+        self.last_screenshot = None  # 最新截图（Base64）
     
     def init_driver(self):
         """初始化浏览器"""
@@ -165,12 +169,39 @@ class DouyinScraperV2:
             return False, f"提交验证码失败：{str(e)}"
     
     def goto_product_rank(self):
-        """进入商品榜单页面"""
+        """
+        进入商品榜单页面（逐步点击，更有动感）
+        路径：电商罗盘 → 商品 → 商品榜单
+        """
         try:
-            # 直接访问商品榜单页面
-            self.driver.get('https://compass.jinritemai.com/shop/chance/product-rank')
-            time.sleep(3)
-            return True, "成功进入商品榜单"
+            # 方法1：逐步点击导航（推荐，更真实）
+            try:
+                # 等待页面加载
+                time.sleep(2)
+                
+                # 点击"电商罗盘"
+                compass_btn = self.driver.find_element(By.XPATH, "//span[text()='电商罗盘' or contains(text(), '罗盘')]")
+                compass_btn.click()
+                time.sleep(1.5)
+                
+                # 点击"商品"
+                product_btn = self.driver.find_element(By.XPATH, "//span[text()='商品' or contains(text(), '商品')]")
+                product_btn.click()
+                time.sleep(1.5)
+                
+                # 点击"商品榜单"
+                rank_btn = self.driver.find_element(By.XPATH, "//span[text()='商品榜单' or contains(text(), '榜单')]")
+                rank_btn.click()
+                time.sleep(3)
+                
+                return True, "成功进入商品榜单（逐步点击）"
+            
+            except:
+                # 方法2：直接URL（备用）
+                self.driver.get('https://compass.jinritemai.com/shop/chance/product-rank')
+                time.sleep(3)
+                return True, "成功进入商品榜单（直接URL）"
+        
         except Exception as e:
             return False, f"进入榜单失败：{str(e)}"
     
@@ -249,8 +280,13 @@ class DouyinScraperV2:
             print(f"选择选项失败：{str(e)}")
             return False
     
-    def get_products(self, limit=50):
-        """获取商品列表"""
+    def get_products(self, limit=50, first_time_only=False):
+        """
+        获取商品列表
+        @param limit: 获取数量
+        @param first_time_only: 是否只筛选首次上榜商品
+        @return: 商品列表
+        """
         products = []
         
         try:
@@ -265,34 +301,95 @@ class DouyinScraperV2:
             # 提取商品数据（需要根据实际页面结构调整选择器）
             product_items = self.driver.find_elements(By.CSS_SELECTOR, "tr, .product-item, .rank-item")
             
-            for item in product_items[:limit]:
+            for idx, item in enumerate(product_items[:limit * 2], 1):  # 多取一些备用
                 try:
                     product = {
-                        'title': item.find_element(By.CSS_SELECTOR, "a, .title, .product-name").text,
-                        'price': item.find_element(By.CSS_SELECTOR, ".price, .product-price").text,
-                        'sales': '',
-                        'url': '',
-                        'image': ''
+                        'rank': idx,  # 排名
+                        'product_id': '',  # 商品ID
+                        'title': '',  # 标题
+                        'price': '',  # 价格
+                        'sales': '',  # 销量
+                        'gmv': '',  # GMV
+                        'url': '',  # 链接
+                        'image': '',  # 图片
+                        'shop_name': '',  # 店铺名称
+                        'is_first_time': False,  # 是否首次上榜
+                        'growth_rate': '',  # 增长率
                     }
                     
-                    # 尝试获取更多信息
+                    # 获取标题
                     try:
-                        product['url'] = item.find_element(By.CSS_SELECTOR, "a").get_attribute('href')
+                        product['title'] = item.find_element(By.CSS_SELECTOR, "a, .title, .product-name, .goods-name").text
                     except:
                         pass
                     
+                    # 获取链接
+                    try:
+                        product['url'] = item.find_element(By.CSS_SELECTOR, "a").get_attribute('href')
+                        # 从URL提取商品ID
+                        if 'product' in product['url'] or 'goods' in product['url']:
+                            import re
+                            match = re.search(r'(\d{10,})', product['url'])
+                            if match:
+                                product['product_id'] = match.group(1)
+                    except:
+                        pass
+                    
+                    # 获取价格
+                    try:
+                        product['price'] = item.find_element(By.CSS_SELECTOR, ".price, .product-price, .goods-price").text
+                    except:
+                        pass
+                    
+                    # 获取销量
+                    try:
+                        product['sales'] = item.find_element(By.CSS_SELECTOR, ".sales, .sale-count").text
+                    except:
+                        pass
+                    
+                    # 获取GMV
+                    try:
+                        product['gmv'] = item.find_element(By.CSS_SELECTOR, ".gmv, .revenue").text
+                    except:
+                        pass
+                    
+                    # 获取图片
                     try:
                         product['image'] = item.find_element(By.CSS_SELECTOR, "img").get_attribute('src')
                     except:
                         pass
                     
+                    # 获取店铺名称
                     try:
-                        product['sales'] = item.find_element(By.CSS_SELECTOR, ".sales, .gmv").text
+                        product['shop_name'] = item.find_element(By.CSS_SELECTOR, ".shop, .store, .shop-name").text
                     except:
                         pass
                     
-                    if product['title']:  # 只添加有标题的
+                    # 检查是否首次上榜（通常有"首次上榜"标识）
+                    try:
+                        first_badge = item.find_elements(By.XPATH, ".//*[contains(text(), '首次') or contains(text(), '新上榜') or contains(@class, 'first') or contains(@class, 'new')]")
+                        if first_badge:
+                            product['is_first_time'] = True
+                    except:
+                        pass
+                    
+                    # 获取增长率
+                    try:
+                        product['growth_rate'] = item.find_element(By.CSS_SELECTOR, ".growth, .rate, .increase").text
+                    except:
+                        pass
+                    
+                    # 如果只要首次上榜，则过滤
+                    if first_time_only and not product['is_first_time']:
+                        continue
+                    
+                    # 只添加有标题的
+                    if product['title']:
                         products.append(product)
+                        
+                        # 达到数量限制
+                        if len(products) >= limit:
+                            break
                 
                 except:
                     continue
@@ -301,6 +398,52 @@ class DouyinScraperV2:
             print(f"获取商品失败：{str(e)}")
         
         return products
+    
+    def take_screenshot(self, max_width=800):
+        """
+        截取当前页面，返回Base64编码的图片
+        @param max_width: 最大宽度（前端显示用）
+        @return: Base64字符串
+        """
+        try:
+            # 截取整个页面
+            screenshot_png = self.driver.get_screenshot_as_png()
+            
+            # 用PIL调整尺寸（减小传输数据量）
+            img = Image.open(BytesIO(screenshot_png))
+            
+            # 按比例缩放到max_width
+            if img.width > max_width:
+                ratio = max_width / img.width
+                new_height = int(img.height * ratio)
+                img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+            
+            # 转为Base64
+            buffered = BytesIO()
+            img.save(buffered, format="PNG")
+            img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+            
+            # 保存最新截图
+            self.last_screenshot = img_base64
+            
+            return img_base64
+        
+        except Exception as e:
+            print(f"截图失败：{str(e)}")
+            return None
+    
+    def get_current_status(self):
+        """
+        获取当前状态信息（用于前端显示）
+        @return: {status, message, screenshot}
+        """
+        screenshot = self.take_screenshot()
+        
+        return {
+            'status': self.login_status,
+            'current_url': self.driver.current_url if self.driver else '',
+            'screenshot': screenshot
+        }
     
     def close(self):
         """关闭浏览器"""

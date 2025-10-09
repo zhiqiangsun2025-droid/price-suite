@@ -1049,7 +1049,7 @@ def douyin_get_options(auth):
 def douyin_scrape(auth):
     """
     步骤4：根据客户选择的参数爬取商品
-    客户端发送：rank_type, time_range, category, brand_type, limit
+    客户端发送：rank_type, time_range, category, brand_type, limit, first_time_only, top_n
     服务器返回：商品列表
     """
     client_id = request.headers.get('X-Client-ID')
@@ -1060,6 +1060,8 @@ def douyin_scrape(auth):
     category = data.get('category')
     brand_type = data.get('brand_type')
     limit = int(data.get('limit', 50))
+    first_time_only = data.get('first_time_only', False)  # 是否只要首次上榜
+    top_n = int(data.get('top_n', 0))  # 前N名（0表示全部）
     
     scraper = scraper_pool.get(client_id)
     if not scraper or scraper.login_status != 'logged_in':
@@ -1078,12 +1080,49 @@ def douyin_scrape(auth):
         )
         
         # 获取商品
-        products = scraper.get_products(limit=limit)
+        products = scraper.get_products(limit=limit, first_time_only=first_time_only)
+        
+        # 如果指定了前N名，则截取
+        if top_n > 0:
+            products = products[:top_n]
         
         return jsonify({
             'success': True,
             'products': products,
             'count': len(products)
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/douyin-screenshot', methods=['POST'])
+@require_auth
+def douyin_screenshot(auth):
+    """
+    获取当前页面截图（用于前端实时显示）
+    前端可以每2-3秒轮询一次
+    """
+    client_id = request.headers.get('X-Client-ID')
+    
+    scraper = scraper_pool.get(client_id)
+    if not scraper:
+        return jsonify({
+            'success': False,
+            'error': '未找到会话，请先登录'
+        }), 400
+    
+    try:
+        status_info = scraper.get_current_status()
+        
+        return jsonify({
+            'success': True,
+            'login_status': status_info['status'],
+            'current_url': status_info['current_url'],
+            'screenshot': status_info['screenshot']
         })
     
     except Exception as e:
