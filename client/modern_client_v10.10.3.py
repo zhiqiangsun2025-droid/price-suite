@@ -713,168 +713,205 @@ class UltimateApp(ctk.CTk):
     # ==================== 页面2：智能选品 ====================
     
     def show_smart_selection(self):
-        """智能选品页面"""
+        """智能选品页面（左右分栏布局）"""
         if not self.douyin_logged_in:
             # 未登录提示
+            warning_frame = ctk.CTkFrame(self.content_frame, fg_color=Theme.CARD_BG, corner_radius=15)
+            warning_frame.pack(expand=True, padx=100, pady=100)
+            
             ctk.CTkLabel(
-                self.content_frame,
-                text="⚠️\n\n请先登录抖音罗盘\n\n点击左侧菜单进行登录",
-                font=ctk.CTkFont(size=20),
-                text_color=Theme.YELLOW,
-                justify="center"
-            ).pack(expand=True)
+                warning_frame,
+                text="⚠️  需要先登录",
+                font=ctk.CTkFont(size=20, weight="bold"),
+                text_color=Theme.ORANGE
+            ).pack(pady=(40, 10))
+            
+            ctk.CTkLabel(
+                warning_frame,
+                text="请点击左侧【抖音罗盘】菜单进行登录",
+                font=ctk.CTkFont(size=14),
+                text_color=Theme.TEXT_SECONDARY
+            ).pack(pady=(0, 30))
+            
+            ctk.CTkButton(
+                warning_frame,
+                text="前往登录",
+                font=ctk.CTkFont(size=14, weight="bold"),
+                fg_color=Theme.PRIMARY,
+                width=150,
+                height=40,
+                command=lambda: self.switch_page("douyin_login")
+            ).pack(pady=(0, 40))
             return
         
-        container = ctk.CTkScrollableFrame(self.content_frame, fg_color="transparent")
-        container.pack(fill="both", expand=True, padx=30, pady=30)
+        container = ctk.CTkFrame(self.content_frame, fg_color="transparent")
+        container.pack(fill="both", expand=True, padx=20, pady=20)
         
-        # 标题
+        # 标题栏
+        header = ctk.CTkFrame(container, fg_color="transparent", height=60)
+        header.pack(fill="x", pady=(0, 15))
+        
         ctk.CTkLabel(
-            container,
-            text="🎯 智能选品 · 半自动模式",
-            font=ctk.CTkFont(size=32, weight="bold"),
-            text_color=Theme.ORANGE
-        ).pack(pady=(0,30))
+            header,
+            text="🎯 智能选品",
+            font=ctk.CTkFont(size=24, weight="bold"),
+            text_color=Theme.PRIMARY
+        ).pack(side="left")
         
-        # 表单卡片
-        form = ctk.CTkFrame(container, fg_color=Theme.CARD_BG, corner_radius=20)
-        form.pack(fill="x", pady=10)
+        # 左右分栏
+        cols = ctk.CTkFrame(container, fg_color="transparent")
+        cols.pack(fill="both", expand=True)
         
-        # 第一行：榜单类型 + 时间段
-        row1 = ctk.CTkFrame(form, fg_color="transparent")
-        row1.pack(fill="x", padx=40, pady=(30,15))
+        # ========== 左侧：筛选条件（350px固定宽度）==========
+        left_panel = ctk.CTkFrame(cols, width=350, fg_color=Theme.CARD_BG, corner_radius=15)
+        left_panel.pack(side="left", fill="y", padx=(0, 15))
+        left_panel.pack_propagate(False)
         
-        ctk.CTkLabel(row1, text="📊 榜单类型", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(0,5))
+        # 左侧标题
+        ctk.CTkLabel(
+            left_panel,
+            text="📋 筛选条件",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color=Theme.PRIMARY
+        ).pack(pady=(20, 15), padx=20, anchor="w")
+        
+        # 可滚动的筛选区域
+        form = ctk.CTkScrollableFrame(left_panel, fg_color="transparent")
+        form.pack(fill="both", expand=True, padx=15, pady=(0, 15))
+        
+        # 榜单类型
+        ctk.CTkLabel(form, text="📊 榜单类型", font=ctk.CTkFont(size=13, weight="bold"), text_color=Theme.TEXT_PRIMARY).pack(anchor="w", pady=(10,5), padx=5)
         self.rank_type_var = ctk.StringVar(value="搜索榜")
         self.rank_type_combo = ctk.CTkComboBox(
-            row1,
+            form,
             variable=self.rank_type_var,
-            values=["搜索榜", "直播榜", "商品卡榜", "达人带货榜", "短视频榜", "实时爆品挖掘榜"],
-            width=250,
-            height=40,
-            font=ctk.CTkFont(size=13),
-            button_color=Theme.ORANGE,
-            button_hover_color=self.darken_color(Theme.ORANGE)
+            values=["搜索榜", "直播榜", "商品卡榜"],
+            width=300,
+            height=36,
+            font=ctk.CTkFont(size=12),
+            fg_color=Theme.BG_SECONDARY,
+            button_color=Theme.PRIMARY
         )
-        self.rank_type_combo.pack(anchor="w")
+        self.rank_type_combo.pack(anchor="w", padx=5)
         
-        ctk.CTkLabel(row1, text="📅 时间段", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(20,5))
+        # 时间段
+        ctk.CTkLabel(form, text="📅 时间段", font=ctk.CTkFont(size=13, weight="bold"), text_color=Theme.TEXT_PRIMARY).pack(anchor="w", pady=(15,5), padx=5)
         self.time_range_var = ctk.StringVar(value="近1天")
         self.time_range_combo = ctk.CTkComboBox(
-            row1,
+            form,
             variable=self.time_range_var,
             values=["近1天", "近7天", "近30天"],
-            width=200,
-            height=40,
-            font=ctk.CTkFont(size=13),
-            button_color=Theme.CYAN,
-            button_hover_color=self.darken_color(Theme.CYAN)
+            width=300,
+            height=36,
+            font=ctk.CTkFont(size=12),
+            fg_color=Theme.BG_SECONDARY,
+            button_color=Theme.PRIMARY
         )
-        self.time_range_combo.pack(anchor="w")
+        self.time_range_combo.pack(anchor="w", padx=5)
         
-        # 第二行：品类类型 + 首次上榜
-        row2 = ctk.CTkFrame(form, fg_color="transparent")
-        row2.pack(fill="x", padx=40, pady=15)
-        
-        ctk.CTkLabel(row2, text="🏷️ 品类类型", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(0,5))
+        # 品类类型
+        ctk.CTkLabel(form, text="🏷️ 品类类型", font=ctk.CTkFont(size=13, weight="bold"), text_color=Theme.TEXT_PRIMARY).pack(anchor="w", pady=(15,5), padx=5)
         self.category_var = ctk.StringVar(value="不限")
         self.category_combo = ctk.CTkComboBox(
-            row2,
+            form,
             variable=self.category_var,
-            values=["不限", "知名品牌", "新锐品牌", "价格带", "自营"],
-            width=200,
-            height=40,
-            font=ctk.CTkFont(size=13),
-            button_color=Theme.YELLOW,
-            button_hover_color=self.darken_color(Theme.YELLOW)
+            values=["不限", "知名品牌", "新锐品牌"],
+            width=300,
+            height=36,
+            font=ctk.CTkFont(size=12),
+            fg_color=Theme.BG_SECONDARY,
+            button_color=Theme.PRIMARY
         )
-        self.category_combo.pack(anchor="w")
+        self.category_combo.pack(anchor="w", padx=5)
         
-        ctk.CTkLabel(row2, text="⭐ 首次上榜筛选", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(20,5))
+        # 首次上榜
+        ctk.CTkLabel(form, text="⭐ 筛选选项", font=ctk.CTkFont(size=13, weight="bold"), text_color=Theme.TEXT_PRIMARY).pack(anchor="w", pady=(15,5), padx=5)
         self.first_time_var = ctk.BooleanVar(value=False)
         self.first_time_switch = ctk.CTkSwitch(
-            row2,
-            text="只筛选首次上榜商品",
+            form,
+            text="只要首次上榜",
             variable=self.first_time_var,
-            font=ctk.CTkFont(size=13),
-            progress_color=Theme.GREEN
+            font=ctk.CTkFont(size=12),
+            progress_color=Theme.PRIMARY
         )
-        self.first_time_switch.pack(anchor="w")
+        self.first_time_switch.pack(anchor="w", padx=5)
         
-        # 第三行：数量控制
-        row3 = ctk.CTkFrame(form, fg_color="transparent")
-        row3.pack(fill="x", padx=40, pady=15)
-        
-        left_col = ctk.CTkFrame(row3, fg_color="transparent")
-        left_col.pack(side="left", fill="x", expand=True)
-        
-        ctk.CTkLabel(left_col, text="🔢 爬取数量", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(0,5))
+        # 爬取数量
+        ctk.CTkLabel(form, text="🔢 爬取数量", font=ctk.CTkFont(size=13, weight="bold"), text_color=Theme.TEXT_PRIMARY).pack(anchor="w", pady=(15,5), padx=5)
         self.limit_var = ctk.StringVar(value="50")
         self.limit_entry = ctk.CTkEntry(
-            left_col,
+            form,
             textvariable=self.limit_var,
-            width=150,
-            height=40,
-            font=ctk.CTkFont(size=14)
+            width=300,
+            height=36,
+            font=ctk.CTkFont(size=12),
+            placeholder_text="1-200"
         )
-        self.limit_entry.pack(anchor="w")
+        self.limit_entry.pack(anchor="w", padx=5)
         
-        right_col = ctk.CTkFrame(row3, fg_color="transparent")
-        right_col.pack(side="right", fill="x", expand=True)
-        
-        ctk.CTkLabel(right_col, text="🏆 只保留前N名", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(0,5))
+        # 保留前N名
+        ctk.CTkLabel(form, text="🏆 保留前N名", font=ctk.CTkFont(size=13, weight="bold"), text_color=Theme.TEXT_PRIMARY).pack(anchor="w", pady=(15,5), padx=5)
         self.top_n_var = ctk.StringVar(value="0")
         self.top_n_entry = ctk.CTkEntry(
-            right_col,
+            form,
             textvariable=self.top_n_var,
-            width=150,
-            height=40,
-            font=ctk.CTkFont(size=14),
-            placeholder_text="0表示全部"
+            width=300,
+            height=36,
+            font=ctk.CTkFont(size=12),
+            placeholder_text="0=全部"
         )
-        self.top_n_entry.pack(anchor="w")
+        self.top_n_entry.pack(anchor="w", padx=5)
         
         # 开始按钮
         self.start_btn = ctk.CTkButton(
             form,
-            text="🚀 开始智能选品",
-            font=ctk.CTkFont(size=20, weight="bold"),
-            fg_color=Theme.ORANGE,
-            hover_color=self.darken_color(Theme.ORANGE),
-            height=60,
+            text="🚀 开始选品",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            fg_color=Theme.PRIMARY,
+            hover_color=self.darken_color(Theme.PRIMARY),
+            height=45,
             width=300,
-            corner_radius=30,
+            corner_radius=8,
             command=self.start_selection
         )
-        self.start_btn.pack(pady=30)
+        self.start_btn.pack(pady=(25, 10), padx=5)
         
         # 进度提示
         self.selection_progress = ctk.CTkLabel(
             form,
             text="",
-            font=ctk.CTkFont(size=14),
-            text_color=Theme.YELLOW
+            font=ctk.CTkFont(size=11),
+            text_color=Theme.PRIMARY
         )
-        self.selection_progress.pack(pady=(0,30))
+        self.selection_progress.pack(pady=(0, 15), padx=5)
         
-        # 结果表格区域
-        self.result_frame = ctk.CTkFrame(container, fg_color=Theme.CARD_BG, corner_radius=20)
-        self.result_frame.pack(fill="both", expand=True, pady=(20,0))
+        # ========== 右侧：实时画面+结果 ==========
+        right_panel = ctk.CTkFrame(cols, fg_color=Theme.CARD_BG, corner_radius=15)
+        right_panel.pack(side="right", fill="both", expand=True)
+        
+        # 右侧标题
+        right_header = ctk.CTkFrame(right_panel, fg_color="transparent", height=50)
+        right_header.pack(fill="x", padx=20, pady=(15, 10))
         
         ctk.CTkLabel(
-            self.result_frame,
-            text="📋 选品结果",
-            font=ctk.CTkFont(size=20, weight="bold"),
-            text_color=Theme.CYAN
-        ).pack(pady=20)
+            right_header,
+            text="📊 实时进度",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color=Theme.PRIMARY
+        ).pack(side="left")
+        
+        # 结果区域（可滚动）
+        self.result_frame = ctk.CTkScrollableFrame(right_panel, fg_color=Theme.BG_PRIMARY, corner_radius=10)
+        self.result_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
         
         self.result_label = ctk.CTkLabel(
             self.result_frame,
-            text="暂无数据\n\n请点击上方【开始智能选品】按钮",
+            text="📋\n\n点击左侧【开始选品】\n查看实时抓取进度和结果",
             font=ctk.CTkFont(size=14),
-            text_color=Theme.TEXT_HINT
+            text_color=Theme.TEXT_HINT,
+            justify="center"
         )
-        self.result_label.pack(pady=40)
+        self.result_label.pack(expand=True, pady=50)
     
     def start_selection(self):
         """开始智能选品"""
