@@ -23,9 +23,28 @@ ctk.set_default_color_theme("blue")
 
 # 配置
 SERVER_URL = "http://172.19.251.155:5000"
-CONFIG_FILE = "client_config.json"
 TRIAL_DURATION = 3600  # 1小时
 CONTACT_QQ = "123456789"
+
+# 配置文件保存到系统目录（用户看不到）
+def get_config_path():
+    """获取配置文件路径（AppData目录）"""
+    if platform.system() == 'Windows':
+        # Windows: C:\Users\用户名\AppData\Local\智能选品系统
+        app_data = os.path.expandvars(r'%LOCALAPPDATA%')
+        config_dir = os.path.join(app_data, '智能选品系统')
+    else:
+        # Linux/Mac: ~/.config/智能选品系统
+        home = os.path.expanduser('~')
+        config_dir = os.path.join(home, '.config', '智能选品系统')
+    
+    # 确保目录存在
+    if not os.path.exists(config_dir):
+        os.makedirs(config_dir)
+    
+    return os.path.join(config_dir, 'config.json')
+
+CONFIG_FILE = get_config_path()
 
 # 配色方案
 BG_COLOR = "#1E1E1E"
