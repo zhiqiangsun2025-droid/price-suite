@@ -263,11 +263,12 @@ def require_auth(f):
             active_rule = c.fetchone()  # 当前未强制校验，仅用于业务策略
 
         # 更新请求统计（使用北京时间）
+        # 只在首次为空时写入IP，避免管理员清空后被自动回填
         c.execute('''
             UPDATE authorizations 
             SET request_count = request_count + 1,
                 last_request_at = ?,
-                ip_address = ?
+                ip_address = CASE WHEN (ip_address IS NULL OR ip_address = '') THEN ? ELSE ip_address END
             WHERE client_id = ?
         ''', (get_beijing_time(), ip_address, client_id))
         

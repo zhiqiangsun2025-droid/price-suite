@@ -73,17 +73,27 @@ class DouyinScraperV2:
             time.sleep(2)
             
             # 2. 明确点击“邮箱登录”
+            # 点击“邮箱登录”标签（页面有时以“手机登录”为默认）
+            switched = False
             try:
-                logger.info("正在查找并点击'邮箱登录'按钮...")
+                logger.info("正在查找并点击'邮箱登录'标签...")
                 email_tab = self.wait.until(
-                    EC.element_to_be_clickable((By.XPATH, "//span[text()='邮箱登录']"))
+                    EC.element_to_be_clickable((By.XPATH, "//*[contains(text(),'邮箱登录') or contains(text(),'邮箱')][not(contains(text(),'手机'))]"))
                 )
-                email_tab.click()
-                logger.info("✅ 已成功点击'邮箱登录'。")
-                time.sleep(1.5)
+                self.driver.execute_script("arguments[0].click();", email_tab)
+                switched = True
+                logger.info("✅ 已点击'邮箱登录'")
+                time.sleep(1.2)
             except Exception as e:
-                logger.warning(f"无法点击'邮箱登录'按钮（可能已在邮箱登录页）: {e}")
-                pass
+                logger.warning(f"未直接找到'邮箱登录'标签，尝试通过切换选项卡: {e}")
+                try:
+                    # 方案2：在登录卡片上查找“邮箱登录”小链接
+                    link = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//a[contains(text(),'邮箱登录')]")))
+                    self.driver.execute_script("arguments[0].click();", link)
+                    switched = True
+                    time.sleep(1.2)
+                except Exception:
+                    pass
             
             # 3. 输入账号密码
             logger.info("正在输入邮箱和密码...")
