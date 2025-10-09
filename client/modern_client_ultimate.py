@@ -240,57 +240,62 @@ class UltimateApp(ctk.CTk):
         update()
     
     def create_left_menu(self, parent):
-        """创建左侧菜单"""
-        menu = ctk.CTkFrame(parent, width=220, fg_color=Theme.BG_SECONDARY, corner_radius=0)
+        """创建左侧菜单（仿微信风格）"""
+        menu = ctk.CTkFrame(parent, width=200, fg_color=Theme.BG_SECONDARY, corner_radius=0)
         menu.pack(side="left", fill="y")
         menu.pack_propagate(False)
         
-        # Logo区域
-        logo_frame = ctk.CTkFrame(menu, fg_color="transparent", height=80)
-        logo_frame.pack(fill="x", pady=20)
+        # Logo区域（优化间距）
+        logo_frame = ctk.CTkFrame(menu, fg_color="transparent", height=100)
+        logo_frame.pack(fill="x", pady=(30, 20))
         
         ctk.CTkLabel(
             logo_frame,
             text="🎯",
-            font=ctk.CTkFont(size=40)
-        ).pack()
+            font=ctk.CTkFont(size=48)  # 更大的图标
+        ).pack(pady=(0, 5))
         
         ctk.CTkLabel(
             logo_frame,
             text="智能选品系统",
-            font=ctk.CTkFont(size=16, weight="bold"),
-            text_color=Theme.ORANGE
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color=Theme.PRIMARY  # 使用主色调
         ).pack()
         
-        # 菜单项
+        # 菜单项（优化图标和文字）
         self.current_page = "douyin_login"
         
         menus = [
-            ("📱 抖音罗盘", "douyin_login", Theme.RED),
-            ("🎯 智能选品", "smart_selection", Theme.ORANGE),
-            ("📊 数据分析", "data_analysis", Theme.CYAN),
-            ("⚙️ 系统设置", "settings", Theme.TEXT_SECONDARY),
+            ("📱  抖音罗盘", "douyin_login"),
+            ("🎯  智能选品", "smart_selection"),
+            ("📊  数据分析", "data_analysis"),
+            ("⚙️  系统设置", "settings"),
         ]
         
-        for label, page_id, color in menus:
-            self.create_menu_btn(menu, label, page_id, color)
+        # 添加间距
+        ctk.CTkFrame(menu, height=10, fg_color="transparent").pack()
+        
+        for label, page_id in menus:
+            self.create_menu_btn(menu, label, page_id)
     
-    def create_menu_btn(self, parent, label, page_id, color):
-        """创建菜单按钮"""
+    def create_menu_btn(self, parent, label, page_id):
+        """创建菜单按钮（微信风格）"""
         is_active = (page_id == self.current_page)
         
         btn = ctk.CTkButton(
             parent,
             text=label,
-            font=ctk.CTkFont(size=15, weight="bold" if is_active else "normal"),
-            fg_color=color if is_active else "transparent",
-            hover_color=self.darken_color(color),
+            font=ctk.CTkFont(size=14, weight="bold" if is_active else "normal"),
+            fg_color=Theme.PRIMARY if is_active else "transparent",
+            hover_color=Theme.PRIMARY if not is_active else self.darken_color(Theme.PRIMARY),
+            text_color="white" if is_active else Theme.TEXT_PRIMARY,
             anchor="w",
-            height=50,
-            corner_radius=10,
+            height=48,
+            corner_radius=8,
+            border_width=0,
             command=lambda: self.switch_page(page_id)
         )
-        btn.pack(fill="x", padx=15, pady=8)
+        btn.pack(fill="x", padx=12, pady=6)
     
     def darken_color(self, hex_color, factor=0.8):
         """使颜色变暗"""
@@ -311,7 +316,7 @@ class UltimateApp(ctk.CTk):
         for widget in self.winfo_children():
             if isinstance(widget, ctk.CTkFrame):
                 for child in widget.winfo_children():
-                    if isinstance(child, ctk.CTkFrame) and child.cget("width") == 220:
+                    if isinstance(child, ctk.CTkFrame) and child.cget("width") == 200:
                         child.destroy()
                         self.create_left_menu(widget)
                         break
@@ -404,28 +409,49 @@ class UltimateApp(ctk.CTk):
         self.douyin_progress_label.pack(pady=(0,30))
         
         # 右侧：实时截图预览
-        right = ctk.CTkFrame(cols, fg_color=Theme.CARD_BG, corner_radius=20)
+        right = ctk.CTkFrame(cols, fg_color=Theme.CARD_BG, corner_radius=15)
         right.pack(side="right", fill="both", expand=True, padx=(15,0))
         
-        ctk.CTkLabel(
-            right,
-            text="📺 实时页面预览",
-            font=ctk.CTkFont(size=20, weight="bold"),
-            text_color=Theme.CYAN
-        ).pack(pady=(30,20))
+        right_header = ctk.CTkFrame(right, fg_color="transparent", height=60)
+        right_header.pack(fill="x", padx=20, pady=(20,10))
         
-        # 截图显示
+        ctk.CTkLabel(
+            right_header,
+            text="📺 实时页面预览",
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color=Theme.PRIMARY
+        ).pack(side="left")
+        
+        # 刷新状态指示
+        self.screenshot_status = ctk.CTkLabel(
+            right_header,
+            text="⏸ 未启动",
+            font=ctk.CTkFont(size=12),
+            text_color=Theme.TEXT_HINT
+        )
+        self.screenshot_status.pack(side="right")
+        
+        # 截图显示区域（添加边框）
+        screenshot_container = ctk.CTkFrame(right, fg_color=Theme.BG_PRIMARY, corner_radius=10)
+        screenshot_container.pack(fill="both", expand=True, padx=20, pady=(10,20))
+        
         self.screenshot_label = ctk.CTkLabel(
-            right,
-            text="🌐\n\n登录后将显示实时页面截图\n\n让您实时了解登录进度",
+            screenshot_container,
+            text="🌐\n\n点击【开始登录】后\n将显示实时页面截图\n\n让您全程掌握登录进度",
             font=ctk.CTkFont(size=14),
             text_color=Theme.TEXT_HINT,
             justify="center"
         )
-        self.screenshot_label.pack(pady=20, padx=20, expand=True)
+        self.screenshot_label.pack(fill="both", expand=True, padx=10, pady=10)
         
         # 停止截图轮询的标志
         self.screenshot_polling = False
+        
+        # 如果已经登录，显示登录状态
+        if self.douyin_logged_in:
+            self.douyin_login_btn.configure(text="✅ 已登录", fg_color=Theme.GREEN)
+            self.douyin_status_label.configure(text="✅ 已登录", text_color=Theme.GREEN)
+            self.douyin_progress_label.configure(text="登录状态已保持", text_color=Theme.GREEN)
 
     def start_douyin_login(self):
         """开始登录抖音，并启动截图轮询"""
@@ -556,12 +582,16 @@ class UltimateApp(ctk.CTk):
         self.douyin_status_label.configure(text="⭕ 未登录", text_color=Theme.TEXT_SECONDARY)
     
     def poll_screenshot(self):
-        """轮询获取截图"""
+        """轮询获取截图（带状态指示）"""
         if not self.screenshot_polling:
             return
 
         def task():
             try:
+                # 更新状态
+                if hasattr(self, 'screenshot_status'):
+                    self.after(0, lambda: self.screenshot_status.configure(text="🔄 正在刷新..."))
+                
                 headers = {
                     'X-Client-ID': self.client_id,
                     'X-Hardware-ID': self.hardware_id,
@@ -577,13 +607,21 @@ class UltimateApp(ctk.CTk):
                     result = response.json()
                     if result.get('success') and result.get('screenshot'):
                         self.display_screenshot(result['screenshot'])
-                # 2-3秒后再次轮询
+                        # 更新状态为成功
+                        if hasattr(self, 'screenshot_status'):
+                            self.after(0, lambda: self.screenshot_status.configure(
+                                text="✅ 已更新", 
+                                text_color=Theme.GREEN
+                            ))
+                
+                # 3秒后再次轮询
                 if self.screenshot_polling:
-                    self.after(2500, self.poll_screenshot)
-            except:
-                # 2-3秒后再次轮询
+                    self.after(3000, self.poll_screenshot)
+            except Exception as e:
+                print(f"[调试] 截图轮询异常: {e}")
+                # 3秒后再次轮询
                 if self.screenshot_polling:
-                    self.after(2500, self.poll_screenshot)
+                    self.after(3000, self.poll_screenshot)
 
         threading.Thread(target=task, daemon=True).start()
     
