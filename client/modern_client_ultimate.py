@@ -442,12 +442,14 @@ class UltimateApp(ctk.CTk):
     def _login_thread(self, email, password):
         """登录线程"""
         try:
+            print(f"[调试] 登录线程启动，email={email}")
             headers = {
                 'X-Client-ID': self.client_id,
                 'X-Hardware-ID': self.hardware_id,
                 'Content-Type': 'application/json'
             }
             
+            print(f"[调试] 准备发送登录请求到 {SERVER_URL}/api/douyin-login-start")
             # 登录
             response = requests.post(
                 f"{SERVER_URL}/api/douyin-login-start",
@@ -456,17 +458,21 @@ class UltimateApp(ctk.CTk):
                 timeout=60
             )
             
+            print(f"[调试] 收到响应，状态码: {response.status_code}")
             if not response.ok:
                 raise Exception(f"登录失败：{response.status_code}")
             
             result = response.json()
+            print(f"[调试] 响应内容: {result}")
             if not result.get('success'):
                 raise Exception(result.get('error', '登录失败'))
             
             status = result.get('status')
+            message = result.get('message', '')
             
             # 验证码处理
             if status == 'need_code':
+                print(f"[调试] 需要验证码")
                 self.after(0, lambda: self.douyin_progress_label.configure(text="📧 需要邮箱验证码，请查收..."))
                 
                 code = self.after(0, self.show_code_dialog)
@@ -489,10 +495,14 @@ class UltimateApp(ctk.CTk):
                     raise Exception(result.get('message', '验证码错误'))
             
             # 登录成功
+            print(f"[调试] 登录成功")
             self.douyin_logged_in = True
             self.after(0, self._login_success)
         
         except Exception as e:
+            print(f"[调试] 登录异常: {e}")
+            import traceback
+            traceback.print_exc()
             self.after(0, lambda: self._login_failed(str(e)))
     
     def _login_success(self):
