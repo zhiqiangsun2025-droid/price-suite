@@ -185,71 +185,44 @@ class UltimateApp(ctk.CTk):
             self.start_trial_countdown()
     
     def create_status_bar(self):
-        """创建状态栏"""
-        status_bar = ctk.CTkFrame(self, fg_color=Theme.BG_SECONDARY, height=60, corner_radius=0)
+        """创建状态栏（简洁版，无授权提示）"""
+        status_bar = ctk.CTkFrame(self, fg_color=Theme.BG_SECONDARY, height=50, corner_radius=0)
         status_bar.pack(fill="x", side="top")
         
-        if self.is_active == 1:
-            # 已授权
-            icon = ctk.CTkLabel(status_bar, text="✅", font=ctk.CTkFont(size=24))
-            icon.pack(side="left", padx=(20,10), pady=15)
-            
-            text = ctk.CTkLabel(
-                status_bar,
-                text="已授权 | 永久使用",
-                font=ctk.CTkFont(size=14, weight="bold"),
-                text_color=Theme.GREEN
-            )
-            text.pack(side="left", pady=15)
+        # 只显示软件名称和版本（不显示授权状态）
+        title = ctk.CTkLabel(
+            status_bar,
+            text="🎯 智能选品系统 v2.0",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color=Theme.TEXT_PRIMARY
+        )
+        title.pack(side="left", padx=20, pady=12)
         
-        elif self.is_active == 0:
-            # 试用中
-            icon = ctk.CTkLabel(status_bar, text="⏰", font=ctk.CTkFont(size=24))
-            icon.pack(side="left", padx=(20,10), pady=15)
-            
-            self.trial_label = ctk.CTkLabel(
-                status_bar,
-                text="试用版 | 剩余 59分59秒",
-                font=ctk.CTkFont(size=14, weight="bold"),
-                text_color=Theme.YELLOW
-            )
-            self.trial_label.pack(side="left", pady=15)
-            
-            hint = ctk.CTkLabel(
-                status_bar,
-                text=f"完整体验请联系 QQ: {CONTACT_QQ}",
-                font=ctk.CTkFont(size=12),
-                text_color=Theme.TEXT_SECONDARY
-            )
-            hint.pack(side="right", padx=20, pady=15)
-        
-        else:
-            # 被拒绝
-            icon = ctk.CTkLabel(status_bar, text="❌", font=ctk.CTkFont(size=24))
-            icon.pack(side="left", padx=(20,10), pady=15)
-            
-            text = ctk.CTkLabel(
-                status_bar,
-                text="未授权",
-                font=ctk.CTkFont(size=14, weight="bold"),
-                text_color=Theme.RED
-            )
-            text.pack(side="left", pady=15)
+        # 右侧显示当前日期（显得更专业）
+        from datetime import datetime
+        date_str = datetime.now().strftime("%Y年%m月%d日")
+        date_label = ctk.CTkLabel(
+            status_bar,
+            text=date_str,
+            font=ctk.CTkFont(size=12),
+            text_color=Theme.TEXT_SECONDARY
+        )
+        date_label.pack(side="right", padx=20, pady=12)
     
     def start_trial_countdown(self):
-        """试用期倒计时"""
+        """静默检查授权（不显示倒计时）"""
         def update():
+            if not hasattr(self, 'trial_start_time') or self.trial_start_time is None:
+                return
+            
             elapsed = time.time() - self.trial_start_time
             left = TRIAL_DURATION - elapsed
             
             if left <= 0:
-                self.show_expired()
+                # 试用期结束，静默提示（不强制退出）
+                self.show_gentle_reminder()
             else:
-                mins = int(left / 60)
-                secs = int(left % 60)
-                if hasattr(self, 'trial_label'):
-                    self.trial_label.configure(text=f"试用版 | 剩余 {mins}分{secs}秒")
-                self.after(1000, update)
+                self.after(60000, update)  # 每分钟检查一次（不是每秒）
         
         update()
     
@@ -1017,48 +990,55 @@ class UltimateApp(ctk.CTk):
         
         self.after(3000, dialog.destroy)
     
-    def show_expired(self):
-        """试用期到期"""
-        for widget in self.winfo_children():
-            widget.destroy()
+    def show_gentle_reminder(self):
+        """友好提示（不占满屏幕）"""
+        # 创建一个小弹窗，不影响主界面
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("提示")
+        dialog.geometry("400x200")
+        dialog.configure(fg_color=Theme.CARD_BG)
+        dialog.transient(self)
+        dialog.grab_set()
         
-        center = ctk.CTkFrame(self, fg_color=Theme.BG_PRIMARY)
-        center.pack(expand=True)
+        # 居中
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - 200
+        y = (dialog.winfo_screenheight() // 2) - 100
+        dialog.geometry(f'400x200+{x}+{y}')
         
-        ctk.CTkLabel(center, text="⏰", font=ctk.CTkFont(size=100)).pack(pady=40)
-        ctk.CTkLabel(center, text="错误码: 106", font=ctk.CTkFont(size=24, weight="bold"), text_color=Theme.RED).pack(pady=10)
-        ctk.CTkLabel(center, text="功能升级中，请联系客服", font=ctk.CTkFont(size=18), text_color=Theme.TEXT_SECONDARY).pack(pady=15)
+        ctk.CTkLabel(
+            dialog,
+            text="💡 提示",
+            font=ctk.CTkFont(size=20, weight="bold"),
+            text_color=Theme.ORANGE
+        ).pack(pady=(30,15))
         
-        contact = ctk.CTkFrame(center, fg_color=Theme.CARD_BG, corner_radius=20)
-        contact.pack(pady=40, padx=60)
-        
-        ctk.CTkLabel(contact, text="📱 联系客服", font=ctk.CTkFont(size=22, weight="bold"), text_color=Theme.ORANGE).pack(pady=(30,20))
-        
-        qq_frame = ctk.CTkFrame(contact, fg_color="transparent")
-        qq_frame.pack(pady=15)
-        ctk.CTkLabel(qq_frame, text=f"QQ: {CONTACT_QQ}", font=ctk.CTkFont(size=16), text_color=Theme.TEXT_PRIMARY).pack(side="left", padx=15)
+        ctk.CTkLabel(
+            dialog,
+            text="软件功能升级中\n如有疑问请联系客服",
+            font=ctk.CTkFont(size=14),
+            text_color=Theme.TEXT_SECONDARY,
+            justify="center"
+        ).pack(pady=10)
         
         ctk.CTkButton(
-            contact,
-            text="🔄 重新连接",
-            width=160,
-            height=50,
-            fg_color=Theme.GREEN,
-            font=ctk.CTkFont(size=14, weight="bold"),
-            command=self.auto_register
-        ).pack(pady=(20,30))
+            dialog,
+            text="知道了",
+            width=120,
+            height=40,
+            fg_color=Theme.ORANGE,
+            command=dialog.destroy
+        ).pack(pady=20)
     
     def show_error(self, error_code, error_msg):
-        """显示错误"""
-        for widget in self.winfo_children():
-            widget.destroy()
-        
-        center = ctk.CTkFrame(self, fg_color=Theme.BG_PRIMARY)
-        center.pack(expand=True)
-        
-        ctk.CTkLabel(center, text="❌", font=ctk.CTkFont(size=100)).pack(pady=40)
-        ctk.CTkLabel(center, text=f"错误码: {error_code}", font=ctk.CTkFont(size=24, weight="bold"), text_color=Theme.RED).pack(pady=10)
-        ctk.CTkLabel(center, text=error_msg, font=ctk.CTkFont(size=16), text_color=Theme.TEXT_SECONDARY).pack(pady=15)
+        """显示错误（友好版，不占满屏幕）"""
+        # 只显示一个小提示，不影响主界面
+        messagebox.showinfo(
+            "提示",
+            "软件正在初始化，请稍候...\n如有疑问请联系客服"
+        )
+        # 不退出软件，继续显示主界面
+        self.init_main_ui()
 
 if __name__ == "__main__":
     app = UltimateApp()

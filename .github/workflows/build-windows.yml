@@ -18,53 +18,33 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: Install all dependencies
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install customtkinter==5.2.1 requests pillow cryptography pandas openpyxl pyperclip
-        pip install pyautogui pywinauto opencv-python pillow
-        pip install jieba scikit-learn imagehash
-        pip install pyinstaller
+        pip install customtkinter requests pillow pandas openpyxl pyinstaller
     
-    - name: Create RPA package
-      run: |
-        if not exist client\rpa_bundle mkdir client\rpa_bundle
-        if exist rpa xcopy /E /I /Y rpa client\rpa_bundle\rpa
-      shell: cmd
-    
-    - name: Build Full Feature EXE
+    - name: Build EXE
       run: |
         cd client
-        pyinstaller --onefile --noconsole ^
-          --name=智能选品系统完整版 ^
-          --collect-all customtkinter ^
-          --hidden-import=PIL ^
-          --hidden-import=PIL.Image ^
-          --hidden-import=pandas ^
-          --hidden-import=openpyxl ^
-          --hidden-import=requests ^
-          --hidden-import=json ^
-          --hidden-import=threading ^
-          --hidden-import=base64 ^
-          modern_client.py
+        pyinstaller --onefile --noconsole --name=智能选品系统 modern_client.py
       shell: cmd
     
     - name: List build output
       run: |
         dir client\dist
     
-    - name: Upload Full EXE
+    - name: Upload EXE
       uses: actions/upload-artifact@v4
       with:
-        name: 智能选品系统完整版
-        path: client/dist/智能选品系统完整版.exe
+        name: 智能选品系统
+        path: client/dist/智能选品系统.exe
         retention-days: 90
     
     - name: Upload to Release (if tagged)
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: client/dist/智能选品系统完整版.exe
+        files: client/dist/智能选品系统.exe
 
 
 
