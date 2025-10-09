@@ -282,55 +282,55 @@ class SmartSelectionApp(ctk.CTk):
         form = ctk.CTkFrame(self.content_frame, fg_color="#2A2A2A", corner_radius=10)
         form.pack(fill="both", expand=True)
         
-        # 第一行：商品类目 + 时间段
+        # 第一行：榜单类型 + 时间段
         row1 = ctk.CTkFrame(form, fg_color="transparent")
         row1.pack(fill="x", padx=30, pady=(30,15))
         
-        ctk.CTkLabel(row1, text="商品类目:", font=ctk.CTkFont(size=13)).pack(side="left")
-        self.category_entry = ctk.CTkEntry(row1, width=250, placeholder_text="如：女装/连衣裙")
-        self.category_entry.pack(side="left", padx=10)
+        ctk.CTkLabel(row1, text="榜单类型:", font=ctk.CTkFont(size=13)).pack(side="left")
+        self.rank_type_combo = ctk.CTkComboBox(
+            row1,
+            values=["搜索榜", "直播榜", "商品卡榜", "达人带货榜", "短视频榜", "实时爆品挖掘榜"],
+            width=180
+        )
+        self.rank_type_combo.pack(side="left", padx=10)
+        self.rank_type_combo.set("搜索榜")
         
         ctk.CTkLabel(row1, text="时间段:", font=ctk.CTkFont(size=13)).pack(side="left", padx=(30,0))
         self.time_combo = ctk.CTkComboBox(
             row1,
-            values=["近1天", "近3天", "近7天", "近30天"],
+            values=["近1天", "近7天", "近30天"],
             width=150
         )
         self.time_combo.pack(side="left", padx=10)
         self.time_combo.set("近1天")
         
-        # 第二行：筛选数量 + 价差阈值
+        # 第二行：品类类型 + 筛选数量
         row2 = ctk.CTkFrame(form, fg_color="transparent")
         row2.pack(fill="x", padx=30, pady=15)
         
-        ctk.CTkLabel(row2, text="筛选数量:", font=ctk.CTkFont(size=13)).pack(side="left")
+        ctk.CTkLabel(row2, text="品类类型:", font=ctk.CTkFont(size=13)).pack(side="left")
+        self.category_combo = ctk.CTkComboBox(
+            row2,
+            values=["不限", "知名品牌", "新锐品牌", "价格带", "自营"],
+            width=150
+        )
+        self.category_combo.pack(side="left", padx=10)
+        self.category_combo.set("不限")
+        
+        ctk.CTkLabel(row2, text="筛选数量:", font=ctk.CTkFont(size=13)).pack(side="left", padx=(30,0))
         self.count_entry = ctk.CTkEntry(row2, width=150)
         self.count_entry.insert(0, "50")
         self.count_entry.pack(side="left", padx=10)
         
-        ctk.CTkLabel(row2, text="价差阈值:", font=ctk.CTkFont(size=13)).pack(side="left", padx=(30,0))
-        self.discount_entry = ctk.CTkEntry(row2, width=150)
-        self.discount_entry.insert(0, "30")
-        self.discount_entry.pack(side="left", padx=10)
-        ctk.CTkLabel(row2, text="%", font=ctk.CTkFont(size=13)).pack(side="left")
-        
-        # 第三行：销量增长 + 包含官方/自营
+        # 第三行：价差阈值
         row3 = ctk.CTkFrame(form, fg_color="transparent")
         row3.pack(fill="x", padx=30, pady=15)
         
-        ctk.CTkLabel(row3, text="最小销量增长:", font=ctk.CTkFont(size=13)).pack(side="left")
-        self.growth_entry = ctk.CTkEntry(row3, width=150)
-        self.growth_entry.insert(0, "20")
-        self.growth_entry.pack(side="left", padx=10)
-        ctk.CTkLabel(row3, text="%", font=ctk.CTkFont(size=13)).pack(side="left")
-        
-        self.allow_official = ctk.CTkCheckBox(
-            row3,
-            text="包含官方/自营",
-            font=ctk.CTkFont(size=13)
-        )
-        self.allow_official.pack(side="left", padx=(30,0))
-        self.allow_official.select()
+        ctk.CTkLabel(row3, text="价差阈值:", font=ctk.CTkFont(size=13)).pack(side="left")
+        self.discount_entry = ctk.CTkEntry(row3, width=150)
+        self.discount_entry.insert(0, "30")
+        self.discount_entry.pack(side="left", padx=10)
+        ctk.CTkLabel(row3, text="%  (用于后续拼多多对比)", font=ctk.CTkFont(size=11), text_color="#888").pack(side="left")
         
         # 开始按钮
         start_btn = ctk.CTkButton(
@@ -383,15 +383,31 @@ class SmartSelectionApp(ctk.CTk):
     
     def start_selection(self):
         """开始智能选品"""
-        category = self.category_entry.get()
-        if not category:
-            messagebox.showwarning("提示", "请输入商品类目")
+        # 获取参数
+        rank_type = self.rank_type_combo.get()
+        time_range = self.time_combo.get()
+        category = self.category_combo.get()
+        count = self.count_entry.get()
+        discount = self.discount_entry.get()
+        
+        if not count.isdigit():
+            messagebox.showwarning("提示", "筛选数量必须是数字")
             return
         
-        self.progress_label.configure(text="等待开始...")
+        self.progress_label.configure(text="正在连接抖店...")
         
         # TODO: 调用后端API
-        messagebox.showinfo("提示", "智能选品功能正在开发中...")
+        data = {
+            'rank_type': rank_type,
+            'time_range': time_range,
+            'category': category,
+            'count': int(count),
+            'discount_threshold': float(discount) / 100
+        }
+        
+        # 测试提示
+        messagebox.showinfo("提示", f"参数：\n榜单：{rank_type}\n时间：{time_range}\n品类：{category}\n数量：{count}")
+        self.progress_label.configure(text="功能开发中...")
     
     def show_expired(self):
         """试用期到期"""
