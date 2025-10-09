@@ -57,6 +57,12 @@ class Theme:
     # 边框
     BORDER = "#E5E5E5"            # 边框颜色
 
+# ======== 表单统一规范（视觉对齐） ========
+FORM_LABEL_W = 128   # 标签列宽
+FORM_ROW_H   = 44    # 行高（视觉对齐）
+CTRL_H       = 38    # 控件高度（Entry/Combo）
+ROW_GAP      = 12    # 行间距（用于需要时的外边距）
+
 # ==================== 工具函数 ====================
 
 def get_config_path():
@@ -103,6 +109,19 @@ def get_hardware_id():
         return hashlib.sha256(hardware_string.encode()).hexdigest()[:32]
     except:
         return "HARDWARE_ERROR"
+
+def setup_form_grid(frame, rows: int):
+    """为表单容器设置统一Grid规范（两列、若干行）。"""
+    try:
+        frame.grid_columnconfigure(0, minsize=FORM_LABEL_W)
+    except Exception:
+        pass
+    frame.grid_columnconfigure(1, weight=1)
+    for r in range(rows):
+        try:
+            frame.grid_rowconfigure(r, minsize=FORM_ROW_H)
+        except Exception:
+            pass
 
 # ==================== 主应用 ====================
 
@@ -438,14 +457,10 @@ class UltimateApp(ctk.CTk):
             text_color=Theme.ORANGE
         ).pack(pady=(30,12))
 
-        # 表单容器（Grid，两列：标签120px + 控件自适应）
+        # 表单容器（Grid，两列：标签固定 + 控件自适应）
         form_frame = ctk.CTkFrame(left, fg_color="transparent")
         form_frame.pack(fill="x", padx=24, pady=(8, 8))
-        try:
-            form_frame.grid_columnconfigure(0, minsize=120)
-        except Exception:
-            pass
-        form_frame.grid_columnconfigure(1, weight=1)
+        setup_form_grid(form_frame, rows=2)
 
         # 行样式
         label_font = ctk.CTkFont(size=14)
@@ -455,7 +470,7 @@ class UltimateApp(ctk.CTk):
         email_label = ctk.CTkLabel(form_frame, text="📧 邮箱账号", font=label_font, width=120, anchor="e", text_color=Theme.TEXT_PRIMARY)
         email_label.grid(row=0, column=0, sticky="e", padx=(0, 12), pady=(6, 6))
 
-        self.email_entry = ctk.CTkEntry(form_frame, height=44, font=entry_font, placeholder_text="请输入抖店邮箱", justify="left")
+        self.email_entry = ctk.CTkEntry(form_frame, height=CTRL_H, font=entry_font, placeholder_text="请输入抖店邮箱", justify="left")
         if not hasattr(self, "_email_prefilled"):
             self._email_prefilled = True
             self.email_entry.insert(0, "doudianpuhuo3@163.com")
@@ -465,7 +480,7 @@ class UltimateApp(ctk.CTk):
         pwd_label = ctk.CTkLabel(form_frame, text="🔑 登录密码", font=label_font, width=120, anchor="e", text_color=Theme.TEXT_PRIMARY)
         pwd_label.grid(row=1, column=0, sticky="e", padx=(0, 12), pady=(6, 6))
 
-        self.pwd_entry = ctk.CTkEntry(form_frame, height=44, show="*", font=entry_font, placeholder_text="请输入密码", justify="left")
+        self.pwd_entry = ctk.CTkEntry(form_frame, height=CTRL_H, show="*", font=entry_font, placeholder_text="请输入密码", justify="left")
         if not hasattr(self, "_pwd_prefilled"):
             self._pwd_prefilled = True
             self.pwd_entry.insert(0, "Ping99re.com")
@@ -926,8 +941,7 @@ class UltimateApp(ctk.CTk):
         form.pack(fill="both", expand=True, padx=15, pady=(0, 15))
         
         # 左侧筛选表单：改为 Grid 对齐
-        form.grid_columnconfigure(0, minsize=120)
-        form.grid_columnconfigure(1, weight=1)
+        setup_form_grid(form, rows=8)
 
         label_font = ctk.CTkFont(size=14, weight="bold")
         ctrl_font = ctk.CTkFont(size=14)
@@ -935,19 +949,19 @@ class UltimateApp(ctk.CTk):
         # 榜单类型
         ctk.CTkLabel(form, text="📊 榜单类型", font=label_font, text_color=Theme.TEXT_PRIMARY, anchor="e").grid(row=0, column=0, sticky="e", padx=(6, 10), pady=(8, 6))
         self.rank_type_var = ctk.StringVar(value="搜索榜")
-        self.rank_type_combo = ctk.CTkComboBox(form, variable=self.rank_type_var, values=["搜索榜", "直播榜", "商品卡榜"], height=36, font=ctrl_font, fg_color=Theme.BG_SECONDARY, button_color=Theme.PRIMARY)
+        self.rank_type_combo = ctk.CTkComboBox(form, variable=self.rank_type_var, values=["搜索榜", "直播榜", "商品卡榜"], height=CTRL_H, font=ctrl_font, fg_color=Theme.BG_SECONDARY, button_color=Theme.PRIMARY)
         self.rank_type_combo.grid(row=0, column=1, sticky="we", padx=(0, 6), pady=(8, 6))
 
         # 时间段
         ctk.CTkLabel(form, text="📅 时间段", font=label_font, text_color=Theme.TEXT_PRIMARY, anchor="e").grid(row=1, column=0, sticky="e", padx=(6, 10), pady=(6, 6))
         self.time_range_var = ctk.StringVar(value="近1天")
-        self.time_range_combo = ctk.CTkComboBox(form, variable=self.time_range_var, values=["近1天", "近7天", "近30天"], height=36, font=ctrl_font, fg_color=Theme.BG_SECONDARY, button_color=Theme.PRIMARY)
+        self.time_range_combo = ctk.CTkComboBox(form, variable=self.time_range_var, values=["近1天", "近7天", "近30天"], height=CTRL_H, font=ctrl_font, fg_color=Theme.BG_SECONDARY, button_color=Theme.PRIMARY)
         self.time_range_combo.grid(row=1, column=1, sticky="we", padx=(0, 6), pady=(6, 6))
 
         # 品类类型
         ctk.CTkLabel(form, text="🏷️ 品类类型", font=label_font, text_color=Theme.TEXT_PRIMARY, anchor="e").grid(row=2, column=0, sticky="e", padx=(6, 10), pady=(6, 6))
         self.category_var = ctk.StringVar(value="不限")
-        self.category_combo = ctk.CTkComboBox(form, variable=self.category_var, values=["不限", "知名品牌", "新锐品牌"], height=36, font=ctrl_font, fg_color=Theme.BG_SECONDARY, button_color=Theme.PRIMARY)
+        self.category_combo = ctk.CTkComboBox(form, variable=self.category_var, values=["不限", "知名品牌", "新锐品牌"], height=CTRL_H, font=ctrl_font, fg_color=Theme.BG_SECONDARY, button_color=Theme.PRIMARY)
         self.category_combo.grid(row=2, column=1, sticky="we", padx=(0, 6), pady=(6, 6))
 
         # 首次上榜
@@ -959,13 +973,13 @@ class UltimateApp(ctk.CTk):
         # 爬取数量
         ctk.CTkLabel(form, text="🔢 爬取数量", font=label_font, text_color=Theme.TEXT_PRIMARY, anchor="e").grid(row=4, column=0, sticky="e", padx=(6, 10), pady=(6, 6))
         self.limit_var = ctk.StringVar(value="50")
-        self.limit_entry = ctk.CTkEntry(form, textvariable=self.limit_var, height=36, font=ctrl_font, placeholder_text="1-200")
+        self.limit_entry = ctk.CTkEntry(form, textvariable=self.limit_var, height=CTRL_H, font=ctrl_font, placeholder_text="1-200")
         self.limit_entry.grid(row=4, column=1, sticky="we", padx=(0, 6), pady=(6, 6))
 
         # 保留前N名
         ctk.CTkLabel(form, text="🏆 保留前N名", font=label_font, text_color=Theme.TEXT_PRIMARY, anchor="e").grid(row=5, column=0, sticky="e", padx=(6, 10), pady=(6, 12))
         self.top_n_var = ctk.StringVar(value="0")
-        self.top_n_entry = ctk.CTkEntry(form, textvariable=self.top_n_var, height=36, font=ctrl_font, placeholder_text="0=全部")
+        self.top_n_entry = ctk.CTkEntry(form, textvariable=self.top_n_var, height=CTRL_H, font=ctrl_font, placeholder_text="0=全部")
         self.top_n_entry.grid(row=5, column=1, sticky="we", padx=(0, 6), pady=(6, 12))
 
         # 操作按钮
