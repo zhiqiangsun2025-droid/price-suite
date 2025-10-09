@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 智能选品铺货系统 - 终极版客户端
-超级酷炫UI + 动画效果 + 半自动操作
-版本：v10.10.2
+仿微信UI + 智能选品 + 实时画面
+版本：v10.10.3
 """
 
-VERSION = "v10.10.2"
+VERSION = "v10.10.3"
 
 import customtkinter as ctk
 import requests
@@ -24,33 +24,38 @@ from PIL import Image
 from io import BytesIO
 import base64
 
-# 深色主题
-ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("blue")
+# 浅色主题（仿微信）
+ctk.set_appearance_mode("light")
+ctk.set_default_color_theme("green")
 
 # ==================== 配置（硬编码） ====================
 SERVER_URL = "http://172.19.251.155:5000"  # 硬编码，不暴露给客户
 TRIAL_DURATION = 3600  # 1小时试用
 CONTACT_QQ = "123456789"
 
-# 酷炫配色
+# 仿微信配色
 class Theme:
-    # 抖音+拼多多混合风
-    BG_PRIMARY = "#0A0A0A"        # 纯黑背景
-    BG_SECONDARY = "#1A1A1A"      # 次级背景
-    CARD_BG = "#2A2A2A"           # 卡片背景
+    # 背景色（浅色系）
+    BG_PRIMARY = "#EDEDED"        # 主背景（浅灰）
+    BG_SECONDARY = "#F7F7F7"      # 次级背景
+    CARD_BG = "#FFFFFF"           # 卡片背景（白色）
     
-    # 主色调
-    RED = "#FE2C55"               # 抖音红
-    ORANGE = "#FF5E3A"            # 拼多多橙
-    YELLOW = "#FFD01E"            # 拼多多黄
-    CYAN = "#00F2EA"              # 抖音青
-    GREEN = "#00D668"             # 成功绿
+    # 主色调（微信风格）
+    PRIMARY = "#07C160"           # 微信绿
+    SECONDARY = "#576B95"         # 微信蓝
+    RED = "#FA5151"               # 错误红
+    ORANGE = "#FA9D3B"            # 警告橙
+    YELLOW = "#FFC300"            # 提示黄
+    CYAN = "#10AEFF"              # 信息蓝
+    GREEN = "#07C160"             # 成功绿
     
-    # 文字
-    TEXT_PRIMARY = "#FFFFFF"
-    TEXT_SECONDARY = "#8E8E93"
-    TEXT_HINT = "#4A4A4A"
+    # 文字（深色系）
+    TEXT_PRIMARY = "#191919"      # 主文字（深黑）
+    TEXT_SECONDARY = "#666666"    # 次级文字
+    TEXT_HINT = "#999999"         # 提示文字
+    
+    # 边框
+    BORDER = "#E5E5E5"            # 边框颜色
 
 # ==================== 工具函数 ====================
 
@@ -131,6 +136,11 @@ class UltimateApp(ctk.CTk):
             
             if 'trial_start_time' in config:
                 self.trial_start_time = config['trial_start_time']
+            
+            # 恢复登录状态
+            if config.get('douyin_logged_in', False):
+                self.douyin_logged_in = True
+                print(f"[调试] 从配置文件恢复登录状态: 已登录")
             
             self.init_main_ui()
         else:
@@ -511,12 +521,24 @@ class UltimateApp(ctk.CTk):
     def _login_success(self):
         """登录成功"""
         self.screenshot_polling = False
-        self.douyin_login_btn.configure(state="normal", text="✓ 已登录")
-        self.douyin_progress_label.configure(text="✅ 登录成功！正在跳转...")
+        self.douyin_logged_in = True
+        
+        # 保存登录状态到配置文件
+        config = load_config()
+        config['douyin_logged_in'] = True
+        config['login_timestamp'] = time.time()
+        save_config(config)
+        
+        # 更新UI
+        self.douyin_login_btn.configure(state="normal", text="✓ 已登录", fg_color=Theme.GREEN)
+        self.douyin_progress_label.configure(text="✅ 登录成功！", text_color=Theme.GREEN)
         self.douyin_status_label.configure(text="✅ 已登录", text_color=Theme.GREEN)
         
-        # 成功动画
-        self.show_success_animation("登录成功！", "现在可以开始智能选品了", lambda: self.switch_page("smart_selection"))
+        # 显示成功提示
+        messagebox.showinfo("登录成功", "🎉 登录成功！\n\n现在可以开始智能选品了")
+        
+        # 自动跳转到智能选品页面
+        self.after(500, lambda: self.switch_page("smart_selection"))
     
     def _login_failed(self, error):
         """登录失败"""
