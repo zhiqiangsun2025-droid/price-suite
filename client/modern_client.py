@@ -382,7 +382,7 @@ class SmartSelectionApp(ctk.CTk):
         label.pack(expand=True)
     
     def start_selection(self):
-        """开始智能选品"""
+        """开始智能选品（抖店登录 + 爬取）"""
         # 获取参数
         rank_type = self.rank_type_combo.get()
         time_range = self.time_combo.get()
@@ -394,20 +394,201 @@ class SmartSelectionApp(ctk.CTk):
             messagebox.showwarning("提示", "筛选数量必须是数字")
             return
         
+        # 步骤1：开始登录抖店
         self.progress_label.configure(text="正在连接抖店...")
+        self.update()
         
-        # TODO: 调用后端API
-        data = {
-            'rank_type': rank_type,
-            'time_range': time_range,
-            'category': category,
-            'count': int(count),
-            'discount_threshold': float(discount) / 100
-        }
+        try:
+            headers = {
+                'X-Client-ID': self.client_id,
+                'X-Hardware-ID': self.hardware_id,
+                'Content-Type': 'application/json'
+            }
+            
+            # 调用登录接口
+            response = requests.post(
+                f"{self.server_url}/api/douyin-login-start",
+                headers=headers,
+                json={
+                    'email': 'doudianpuhuo3@163.com',
+                    'password': 'Ping99re.com'
+                },
+                timeout=60
+            )
+            
+            if not response.ok:
+                raise Exception(f"登录失败：{response.status_code}")
+            
+            result = response.json()
+            
+            if not result.get('success'):
+                raise Exception(result.get('error', '登录失败'))
+            
+            status = result.get('status')
+            
+            # 步骤2：处理验证码
+            if status == 'need_code':
+                self.progress_label.configure(text="需要邮箱验证码，请查收邮件...")
+                self.update()
+                
+                # 弹出验证码输入框
+                code = self.show_code_dialog()
+                
+                if not code:
+                    self.progress_label.configure(text="已取消")
+                    return
+                
+                # 提交验证码
+                self.progress_label.configure(text="正在提交验证码...")
+                self.update()
+                
+                response = requests.post(
+                    f"{self.server_url}/api/douyin-submit-code",
+                    headers=headers,
+                    json={'code': code},
+                    timeout=30
+                )
+                
+                result = response.json()
+                
+                if not result.get('success'):
+                    raise Exception(result.get('message', '验证码错误'))
+                
+                self.progress_label.configure(text="登录成功！")
+                self.update()
+            
+            elif status == 'success':
+                self.progress_label.configure(text="登录成功（无需验证码）")
+                self.update()
+            
+            else:
+                raise Exception("登录状态未知")
+            
+            # 步骤3：爬取商品
+            self.progress_label.configure(text="正在抓取商品...")
+            self.update()
+            
+            response = requests.post(
+                f"{self.server_url}/api/douyin-scrape",
+                headers=headers,
+                json={
+                    'rank_type': rank_type,
+                    'time_range': time_range,
+                    'category': category if category != '不限' else None,
+                    'brand_type': None,  # TODO: 添加品牌类型选择
+                    'limit': int(count)
+                },
+                timeout=120
+            )
+            
+            result = response.json()
+            
+            if not result.get('success'):
+                raise Exception(result.get('error', '爬取失败'))
+            
+            products = result.get('products', [])
+            
+            if not products:
+                self.progress_label.configure(text="未找到商品")
+                messagebox.showinfo("提示", "未找到商品，请尝试更换筛选条件")
+                return
+            
+            # 步骤4：显示结果
+            self.progress_label.configure(text=f"✓ 成功获取 {len(products)} 个商品")
+            
+            # 简单结果显示（后续可改为表格）
+            result_text = f"成功获取 {len(products)} 个商品\n\n"
+            for i, p in enumerate(products[:10], 1):
+                result_text += f"{i}. {p.get('title', 'N/A')}\n   价格: {p.get('price', 'N/A')}\n\n"
+            
+            if len(products) > 10:
+                result_text += "... 更多商品请查看导出文件"
+            
+            messagebox.showinfo("爬取结果", result_text)
+            
+            # TODO: 导出Excel + 触发RPA
+            
+        except Exception as e:
+            self.progress_label.configure(text=f"❌ 错误")
+            messagebox.showerror("错误", str(e))
+    
+    def show_code_dialog(self):
+        """显示验证码输入弹窗"""
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("输入验证码")
+        dialog.geometry("400x250")
+        dialog.configure(fg_color="#2A2A2A")
+        dialog.transient(self)
+        dialog.grab_set()
         
-        # 测试提示
-        messagebox.showinfo("提示", f"参数：\n榜单：{rank_type}\n时间：{time_range}\n品类：{category}\n数量：{count}")
-        self.progress_label.configure(text="功能开发中...")
+        # 居中显示
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (250 // 2)
+        dialog.geometry(f'400x250+{x}+{y}')
+        
+        code_value = {"value": None}
+        
+        # 标题
+        ctk.CTkLabel(
+            dialog,
+            text="📧 请输入邮箱验证码",
+            font=ctk.CTkFont(size=18, weight="bold")
+        ).pack(pady=(30,10))
+        
+        ctk.CTkLabel(
+            dialog,
+            text="验证码已发送至 doudianpuhuo3@163.com\n请查收邮件",
+            font=ctk.CTkFont(size=12),
+            text_color="#888"
+        ).pack(pady=(0,20))
+        
+        # 输入框
+        code_entry = ctk.CTkEntry(
+            dialog,
+            width=200,
+            height=40,
+            font=ctk.CTkFont(size=16),
+            placeholder_text="输入验证码"
+        )
+        code_entry.pack(pady=15)
+        code_entry.focus()
+        
+        # 按钮
+        btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_frame.pack(pady=20)
+        
+        def submit():
+            code_value["value"] = code_entry.get()
+            dialog.destroy()
+        
+        def cancel():
+            code_value["value"] = None
+            dialog.destroy()
+        
+        ctk.CTkButton(
+            btn_frame,
+            text="✓ 确定",
+            width=120,
+            height=40,
+            fg_color=PRIMARY_COLOR,
+            command=submit
+        ).pack(side="left", padx=10)
+        
+        ctk.CTkButton(
+            btn_frame,
+            text="✗ 取消",
+            width=120,
+            height=40,
+            fg_color="#666",
+            command=cancel
+        ).pack(side="left", padx=10)
+        
+        # 回车提交
+        code_entry.bind("<Return>", lambda e: submit())
+        
+        dialog.wait_window()
+        return code_value["value"]
     
     def show_expired(self):
         """试用期到期"""

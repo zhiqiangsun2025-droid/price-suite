@@ -919,6 +919,194 @@ def search_pinduoduo(keyword):
         }
     ]
 
+# ==================== 抖店爬虫API（支持验证码交互） ====================
+
+# 全局爬虫实例池（key: client_id, value: scraper_instance）
+scraper_pool = {}
+
+from douyin_scraper_v2 import DouyinScraperV2
+
+@app.route('/api/douyin-login-start', methods=['POST'])
+@require_auth
+def douyin_login_start(auth):
+    """
+    步骤1：开始登录
+    客户端发送：邮箱、密码
+    服务器返回：需要验证码 / 登录成功 / 出错
+    """
+    client_id = request.headers.get('X-Client-ID')
+    data = request.json
+    
+    email = data.get('email', 'doudianpuhuo3@163.com')
+    password = data.get('password', 'Ping99re.com')
+    
+    try:
+        # 为该客户创建爬虫实例
+        scraper = DouyinScraperV2(headless=True)
+        scraper.init_driver()
+        
+        # 开始登录
+        status, message = scraper.start_login(email, password)
+        
+        # 保存爬虫实例到池中
+        scraper_pool[client_id] = scraper
+        
+        return jsonify({
+            'success': True,
+            'status': status,  # 'need_code' / 'success' / 'error'
+            'message': message
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/douyin-submit-code', methods=['POST'])
+@require_auth
+def douyin_submit_code(auth):
+    """
+    步骤2：提交验证码
+    客户端发送：验证码
+    服务器返回：登录成功 / 验证码错误
+    """
+    client_id = request.headers.get('X-Client-ID')
+    data = request.json
+    code = data.get('code')
+    
+    if not code:
+        return jsonify({
+            'success': False,
+            'error': '验证码不能为空'
+        }), 400
+    
+    # 从池中获取爬虫实例
+    scraper = scraper_pool.get(client_id)
+    if not scraper:
+        return jsonify({
+            'success': False,
+            'error': '会话已过期，请重新登录'
+        }), 400
+    
+    try:
+        success, message = scraper.submit_verification_code(code)
+        
+        if success:
+            # 登录成功后跳转到榜单页
+            scraper.goto_product_rank()
+        
+        return jsonify({
+            'success': success,
+            'message': message
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/douyin-get-options', methods=['POST'])
+@require_auth
+def douyin_get_options(auth):
+    """
+    步骤3：获取所有可选的榜单选项（用于前端显示）
+    注意：必须先登录成功
+    """
+    client_id = request.headers.get('X-Client-ID')
+    
+    scraper = scraper_pool.get(client_id)
+    if not scraper or scraper.login_status != 'logged_in':
+        return jsonify({
+            'success': False,
+            'error': '请先登录'
+        }), 400
+    
+    try:
+        # 确保在榜单页面
+        scraper.goto_product_rank()
+        
+        # 获取所有选项
+        options = scraper.get_all_rank_options()
+        
+        return jsonify({
+            'success': True,
+            'options': options
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/douyin-scrape', methods=['POST'])
+@require_auth
+def douyin_scrape(auth):
+    """
+    步骤4：根据客户选择的参数爬取商品
+    客户端发送：rank_type, time_range, category, brand_type, limit
+    服务器返回：商品列表
+    """
+    client_id = request.headers.get('X-Client-ID')
+    data = request.json
+    
+    rank_type = data.get('rank_type', '搜索榜')
+    time_range = data.get('time_range', '近1天')
+    category = data.get('category')
+    brand_type = data.get('brand_type')
+    limit = int(data.get('limit', 50))
+    
+    scraper = scraper_pool.get(client_id)
+    if not scraper or scraper.login_status != 'logged_in':
+        return jsonify({
+            'success': False,
+            'error': '请先登录'
+        }), 400
+    
+    try:
+        # 选择选项
+        scraper.select_options(
+            rank_type=rank_type,
+            time_range=time_range,
+            category=category,
+            brand_type=brand_type
+        )
+        
+        # 获取商品
+        products = scraper.get_products(limit=limit)
+        
+        return jsonify({
+            'success': True,
+            'products': products,
+            'count': len(products)
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/douyin-cleanup', methods=['POST'])
+@require_auth
+def douyin_cleanup(auth):
+    """清理爬虫实例（客户端关闭时调用）"""
+    client_id = request.headers.get('X-Client-ID')
+    
+    scraper = scraper_pool.get(client_id)
+    if scraper:
+        scraper.close()
+        del scraper_pool[client_id]
+    
+    return jsonify({'success': True})
+
+
 if __name__ == '__main__':
     print("=" * 60)
     print("商品价格对比系统 - 服务器端")
