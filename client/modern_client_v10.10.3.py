@@ -348,18 +348,9 @@ class UltimateApp(ctk.CTk):
         """切换页面"""
         self.current_page = page_id
         
-        # 清空内容区
+        # 🔥 只清空内容区，不重建菜单！
         for widget in self.content_frame.winfo_children():
             widget.destroy()
-        
-        # 重新创建菜单（更新active状态）
-        for widget in self.winfo_children():
-            if isinstance(widget, ctk.CTkFrame):
-                for child in widget.winfo_children():
-                    if isinstance(child, ctk.CTkFrame) and child.cget("width") == 200:
-                        child.destroy()
-                        self.create_left_menu(widget)
-                        break
         
         # 显示对应页面
         if page_id == "douyin_login":

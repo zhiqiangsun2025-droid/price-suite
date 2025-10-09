@@ -87,18 +87,38 @@ class DouyinScraperV2:
             
             # 3. 输入账号密码
             logger.info("正在输入邮箱和密码...")
-            email_input = self.wait.until(
-                EC.presence_of_element_located((By.XPATH, "//input[@placeholder='手机号码' or @placeholder='邮箱']"))
-            )
-            email_input.clear()
-            email_input.send_keys(email)
-            time.sleep(0.5)
+            # 🔥 使用更通用的定位方式
+            try:
+                # 方法1：通过CSS选择器
+                email_input = self.wait.until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='text'], input[type='email'], input.semi-input"))
+                )
+            except:
+                # 方法2：通过placeholder
+                email_input = self.wait.until(
+                    EC.presence_of_element_located((By.XPATH, "//input[contains(@placeholder, '邮箱') or contains(@placeholder, '手机')]"))
+                )
             
-            # 输入密码
-            pwd_input = self.driver.find_element(By.XPATH, "//input[@type='password']")
+            email_input.clear()
+            time.sleep(0.3)
+            email_input.send_keys(email)
+            time.sleep(0.8)
+            
+            # 输入密码 - 🔥 使用更通用的定位
+            try:
+                # 方法1：CSS选择器
+                pwd_input = self.wait.until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='password']"))
+                )
+            except:
+                # 方法2：获取所有input，选择第二个
+                inputs = self.driver.find_elements(By.TAG_NAME, "input")
+                pwd_input = inputs[1] if len(inputs) > 1 else inputs[0]
+            
             pwd_input.clear()
+            time.sleep(0.3)
             pwd_input.send_keys(password)
-            time.sleep(0.5)
+            time.sleep(0.8)
             
             # 4. 勾选协议
             logger.info("正在勾选用户协议...")
