@@ -61,7 +61,15 @@
         </td>
         <td><small>{{ c[7] if c[7] else '永久' }}</small></td>
         <td><span class="badge bg-info">{{ c[8] }}</span></td>
-        <td><small>{{ c[10] if c[10] else '-' }}</small></td>
+        <td>
+          <small>
+            {% if c[9] %}
+              {{ c[9] }}
+            {% else %}
+              -
+            {% endif %}
+          </small>
+        </td>
         <td>
           <!-- 待审核：显示批准/拒绝 -->
           {% if c[5] == 0 %}

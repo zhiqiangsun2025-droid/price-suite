@@ -9,7 +9,11 @@ pkill -9 -f "app.py" 2>/dev/null
 
 # 启动服务器
 cd "$(dirname "$0")"
-python3 app.py
+
+# 激活虚拟环境
+source venv/bin/activate
+
+python app.py
 
 echo "服务器已启动！"
 echo "管理后台: http://localhost:5000/admin/login"

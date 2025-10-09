@@ -26,10 +26,14 @@ class DouyinScraperV2:
     
     def init_driver(self):
         """初始化浏览器"""
+        from selenium.webdriver.chrome.service import Service
+        from webdriver_manager.chrome import ChromeDriverManager
+        from webdriver_manager.core.os_manager import ChromeType
+        
         chrome_options = Options()
         
         if self.headless:
-            chrome_options.add_argument('--headless')
+            chrome_options.add_argument('--headless=new')
             chrome_options.add_argument('--no-sandbox')
             chrome_options.add_argument('--disable-dev-shm-usage')
         
@@ -39,7 +43,12 @@ class DouyinScraperV2:
         chrome_options.add_experimental_option('useAutomationExtension', False)
         chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
         
-        self.driver = webdriver.Chrome(options=chrome_options)
+        # 设置Chromium路径
+        chrome_options.binary_location = '/usr/bin/chromium-browser'
+        
+        # 使用 webdriver-manager 自动下载并管理 ChromeDriver
+        service = Service(ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install())
+        self.driver = webdriver.Chrome(service=service, options=chrome_options)
         self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         self.wait = WebDriverWait(self.driver, 20)
     

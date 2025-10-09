@@ -15,10 +15,22 @@ from functools import wraps
 import hashlib
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import sqlite3
 import os
 import ipaddress
+import logging
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler('app.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)
@@ -28,6 +40,11 @@ DB_PATH = 'authorization.db'
 SECRET_KEY = 'your-secret-key-change-this'  # 修改为你的密钥
 # 管理员登录口令（可用环境变量 ADMIN_PASSWORD 覆盖）
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+
+# 获取北京时间
+def get_beijing_time():
+    """返回北京时间字符串 (UTC+8)"""
+    return (datetime.utcnow() + timedelta(hours=8)).strftime('%Y-%m-%d %H:%M:%S')
 
 # 用于Flask会话
 app.secret_key = SECRET_KEY
@@ -235,19 +252,20 @@ def require_auth(f):
             c.execute('SELECT * FROM selection_rules WHERE id=? AND is_active=1', (row[0],))
             active_rule = c.fetchone()  # 当前未强制校验，仅用于业务策略
 
-        # 更新请求统计
+        # 更新请求统计（使用北京时间）
         c.execute('''
             UPDATE authorizations 
             SET request_count = request_count + 1,
-                last_request_at = CURRENT_TIMESTAMP,
+                last_request_at = ?,
                 ip_address = ?
             WHERE client_id = ?
-        ''', (ip_address, client_id))
+        ''', (get_beijing_time(), ip_address, client_id))
         
         conn.commit()
         conn.close()
         
-        return f(*args, **kwargs)
+        # 传递 auth 参数给被装饰的函数
+        return f(auth, *args, **kwargs)
     
     return decorated_function
 
@@ -940,13 +958,21 @@ def douyin_login_start(auth):
     email = data.get('email', 'doudianpuhuo3@163.com')
     password = data.get('password', 'Ping99re.com')
     
+    logger.info(f"[抖店登录] 客户端 {client_id} 开始登录，邮箱: {email}")
+    
     try:
+        logger.info(f"[抖店登录] 正在创建爬虫实例...")
         # 为该客户创建爬虫实例
         scraper = DouyinScraperV2(headless=True)
+        
+        logger.info(f"[抖店登录] 正在初始化浏览器...")
         scraper.init_driver()
         
+        logger.info(f"[抖店登录] 正在执行登录...")
         # 开始登录
         status, message = scraper.start_login(email, password)
+        
+        logger.info(f"[抖店登录] 登录结果: status={status}, message={message}")
         
         # 保存爬虫实例到池中
         scraper_pool[client_id] = scraper
@@ -958,9 +984,10 @@ def douyin_login_start(auth):
         })
     
     except Exception as e:
+        logger.error(f"[抖店登录] 登录失败: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': f'登录失败: {str(e)}'
         }), 500
 
 
