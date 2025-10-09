@@ -349,14 +349,33 @@ class UltimateApp(ctk.CTk):
             text_color=Theme.RED
         ).pack(side="left")
         
-        # 登录状态
+        # 右侧：登录状态 + 退出按钮
+        status_frame = ctk.CTkFrame(title_frame, fg_color="transparent")
+        status_frame.pack(side="right")
+        
         self.douyin_status_label = ctk.CTkLabel(
-            title_frame,
+            status_frame,
             text="⭕ 未登录",
             font=ctk.CTkFont(size=16, weight="bold"),
             text_color=Theme.TEXT_SECONDARY
         )
-        self.douyin_status_label.pack(side="right")
+        self.douyin_status_label.pack(side="left", padx=(0, 10))
+        
+        # 退出登录按钮（仅登录后显示）
+        self.douyin_logout_btn = ctk.CTkButton(
+            status_frame,
+            text="🚪 退出登录",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color=Theme.ORANGE,
+            hover_color=self.darken_color(Theme.ORANGE),
+            width=100,
+            height=32,
+            corner_radius=8,
+            command=self.logout_douyin
+        )
+        # 默认隐藏，登录后才显示
+        if not self.douyin_logged_in:
+            self.douyin_logout_btn.pack_forget()
         
         # 左右分栏
         cols = ctk.CTkFrame(container, fg_color="transparent")
@@ -452,6 +471,7 @@ class UltimateApp(ctk.CTk):
             self.douyin_login_btn.configure(text="✅ 已登录", fg_color=Theme.GREEN)
             self.douyin_status_label.configure(text="✅ 已登录", text_color=Theme.GREEN)
             self.douyin_progress_label.configure(text="登录状态已保持", text_color=Theme.GREEN)
+            self.douyin_logout_btn.pack(side="left", padx=(10, 0))
 
     def start_douyin_login(self):
         """开始登录抖音，并启动截图轮询"""
@@ -559,6 +579,9 @@ class UltimateApp(ctk.CTk):
         self.douyin_login_btn.configure(state="normal", text="✓ 已登录", fg_color=Theme.GREEN)
         self.douyin_progress_label.configure(text="✅ 登录成功！", text_color=Theme.GREEN)
         self.douyin_status_label.configure(text="✅ 已登录", text_color=Theme.GREEN)
+        
+        # 显示退出登录按钮
+        self.douyin_logout_btn.pack(side="left", padx=(10, 0))
         
         # 显示成功提示
         messagebox.showinfo("登录成功", "🎉 登录成功！\n\n现在可以开始智能选品了")
@@ -709,6 +732,59 @@ class UltimateApp(ctk.CTk):
         
         dialog.wait_window()
         return code_value["value"]
+    
+    def logout_douyin(self):
+        """退出抖音登录"""
+        # 确认对话框
+        result = messagebox.askyesno(
+            "退出登录",
+            "确定要退出登录吗？\n\n退出后可以切换其他抖店账号"
+        )
+        
+        if not result:
+            return
+        
+        try:
+            # 1. 通知后端关闭浏览器实例
+            try:
+                response = requests.post(
+                    f"{self.server_url}/api/douyin-cleanup",
+                    headers={
+                        'X-Client-ID': self.client_id,
+                        'X-Hardware-ID': self.hardware_id
+                    },
+                    timeout=5
+                )
+                print(f"[调试] 后端清理响应: {response.status_code}")
+            except Exception as e:
+                print(f"[调试] 后端清理失败: {e}")
+            
+            # 2. 清除前端登录状态
+            self.douyin_logged_in = False
+            
+            # 3. 清除配置文件中的登录状态
+            config = load_config()
+            config['douyin_logged_in'] = False
+            config.pop('login_timestamp', None)
+            save_config(config)
+            
+            # 4. 重置UI状态
+            self.douyin_login_btn.configure(text="🚀 开始登录", fg_color=Theme.RED, state="normal")
+            self.douyin_status_label.configure(text="⭕ 未登录", text_color=Theme.TEXT_SECONDARY)
+            self.douyin_progress_label.configure(text="")
+            
+            # 隐藏退出登录按钮
+            self.douyin_logout_btn.pack_forget()
+            
+            # 5. 清空输入框（可选）
+            self.email_entry.delete(0, 'end')
+            self.pwd_entry.delete(0, 'end')
+            
+            messagebox.showinfo("退出成功", "✅ 已退出登录\n\n可以重新登录其他抖店账号")
+            
+        except Exception as e:
+            print(f"[调试] 退出登录异常: {e}")
+            messagebox.showerror("错误", f"退出登录失败：{str(e)}")
     
     # ==================== 页面2：智能选品 ====================
     
