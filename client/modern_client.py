@@ -120,17 +120,18 @@ class SmartPriceApp(ctk.CTk):
                     
                     save_config(config)
                     
-                    # 根据状态决定界面
-                    if self.is_active == 1:
-                        # 已授权
-                        self.create_main_ui()
-                    elif self.is_active == 0:
-                        # 待审核 - 进入试用模式
-                        self.trial_start_time = config.get('trial_start_time', time.time())
-                        self.check_trial_status()
-                    else:
-                        # 已拒绝
-                        self.show_rejected_dialog()
+        # 根据状态决定界面
+        if self.is_active == 1:
+            # 已授权
+            self.create_main_ui()
+        elif self.is_active == 0:
+            # 待审核：正常进入主界面，但是在后台计时，到时统一提示
+            self.trial_start_time = config.get('trial_start_time', time.time())
+            self.create_main_ui()
+            self.start_expiry_watch()
+        else:
+            # 已拒绝
+            self.show_rejected_dialog()
                 else:
                     self.show_error_dialog(result.get('error', '注册失败'))
             else:
@@ -140,16 +141,8 @@ class SmartPriceApp(ctk.CTk):
             self.show_error_dialog(f"网络错误：{str(e)}")
     
     def check_trial_status(self):
-        """检查试用期状态"""
-        elapsed = time.time() - self.trial_start_time
-        remaining = TRIAL_DURATION - elapsed
-        
-        if remaining > 0:
-            # 还在试用期
-            self.create_main_ui(trial_mode=True, remaining_seconds=remaining)
-        else:
-            # 试用期已到
-            self.show_trial_expired_dialog()
+        """兼容旧逻辑：不再展示试用提示，仅用于到时触发提示"""
+        self.start_expiry_watch()
     
     def create_main_ui(self, trial_mode=False, remaining_seconds=0):
         """创建主界面"""
@@ -157,10 +150,8 @@ class SmartPriceApp(ctk.CTk):
         for widget in self.winfo_children():
             widget.destroy()
         
-        # 顶部状态栏
-        if trial_mode:
-            self.create_trial_banner(remaining_seconds)
-        else:
+        # 顶部状态栏（仅授权显示绿色条，未授权不显示任何试用字样）
+        if self.is_active == 1:
             self.create_authorized_banner()
         
         # 主容器
@@ -197,39 +188,24 @@ class SmartPriceApp(ctk.CTk):
         label.pack(pady=10)
     
     def create_trial_banner(self, remaining_seconds):
-        """创建试用期状态栏"""
-        self.trial_banner = ctk.CTkFrame(self, fg_color="#FFA500", height=50)
-        self.trial_banner.pack(fill="x", side="top")
-        
-        minutes = int(remaining_seconds / 60)
-        self.trial_label = ctk.CTkLabel(
-            self.trial_banner,
-            text=f"⏰ 试用版：剩余 {minutes} 分钟 | 请联系管理员获取授权",
-            font=ctk.CTkFont(size=14, weight="bold"),
-            text_color="white"
-        )
-        self.trial_label.pack(pady=15)
+        # 已废弃：保持函数以兼容旧调用，不再显示任何试用提示
+        pass
     
     def start_trial_countdown(self, remaining_seconds):
-        """启动试用倒计时"""
-        def update_countdown():
+        # 兼容旧接口：改为后台计时
+        self.start_expiry_watch()
+
+    def start_expiry_watch(self):
+        """后台监视试用期，超时后统一提示"""
+        def tick():
+            if self.trial_start_time is None:
+                return
             elapsed = time.time() - self.trial_start_time
-            remaining = TRIAL_DURATION - elapsed
-            
-            if remaining <= 0:
-                # 试用期到了
+            if elapsed >= TRIAL_DURATION:
                 self.show_trial_expired_dialog()
             else:
-                # 更新显示
-                minutes = int(remaining / 60)
-                seconds = int(remaining % 60)
-                self.trial_label.configure(
-                    text=f"⏰ 试用版：剩余 {minutes}分{seconds}秒 | 请联系管理员获取授权"
-                )
-                # 每秒更新一次
-                self.after(1000, update_countdown)
-        
-        update_countdown()
+                self.after(1000, tick)
+        self.after(1000, tick)
     
     def create_function_area(self, parent):
         """创建功能区"""
@@ -320,9 +296,9 @@ class SmartPriceApp(ctk.CTk):
         # 说明
         msg = ctk.CTkLabel(
             center,
-            text="感谢您的试用！\n如需继续使用，请联系开发者获取授权",
-            font=ctk.CTkFont(size=16),
-            text_color="gray"
+            text=f"功能升级中 请联系QQ{CONTACT_QQ}",
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color="white"
         )
         msg.pack(pady=15)
         

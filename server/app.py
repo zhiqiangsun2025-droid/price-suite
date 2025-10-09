@@ -29,6 +29,13 @@ SECRET_KEY = 'your-secret-key-change-this'  # 修改为你的密钥
 # 管理员登录口令（可用环境变量 ADMIN_PASSWORD 覆盖）
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 
+# 统一限制提示（可通过环境变量 CONTACT_QQ 自定义联系方式）
+CONTACT_QQ = os.environ.get('CONTACT_QQ', '123456789')
+UNIFIED_DENY_MSG = f'功能升级中 请联系QQ{CONTACT_QQ}'
+
+# 待审核可使用的试用时长（秒）
+TRIAL_SECONDS = int(os.environ.get('TRIAL_SECONDS', '3600'))
+
 # 用于Flask会话
 app.secret_key = SECRET_KEY
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -139,63 +146,80 @@ def require_auth(f):
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         
-        c.execute('''
-            SELECT * FROM authorizations 
-            WHERE client_id = ? AND is_active = 1
-        ''', (client_id,))
-        
+        # 先按 client_id 找到记录（无论是否已批准）
+        c.execute('SELECT * FROM authorizations WHERE client_id=?', (client_id,))
         auth = c.fetchone()
         
         if not auth:
             log_request(client_id, ip_address, 'AUTH_FAILED', False, '未授权的客户端')
             conn.close()
-            return jsonify({
-                'success': False,
-                'error': '未授权的客户端，请联系管理员'
-            }), 403
+            return jsonify({'success': False, 'error': UNIFIED_DENY_MSG}), 403
+        
+        # 更新IP与最后访问时间（无论状态）
+        try:
+            c.execute('UPDATE authorizations SET ip_address=?, last_request_at=CURRENT_TIMESTAMP WHERE client_id=?', (ip_address, client_id))
+            conn.commit()
+        except Exception:
+            pass
+        
+        is_active = int(auth[5] or 0)
+        created_at_str = auth[6]
+        allow_trial = False
+        if is_active == 0 and created_at_str:
+            try:
+                created_at = datetime.strptime(created_at_str, '%Y-%m-%d %H:%M:%S')
+                allow_trial = (datetime.now() - created_at).total_seconds() <= TRIAL_SECONDS
+            except Exception:
+                allow_trial = False
+        
+        # 若未批准且不在试用期，统一拒绝
+        if is_active != 1 and not allow_trial:
+            log_request(client_id, ip_address, 'PENDING_OR_EXPIRED', False, '待审核或试用已过期')
+            conn.close()
+            return jsonify({'success': False, 'error': UNIFIED_DENY_MSG}), 403
         
         # 验证 IP（支持 authorizations.ip_address 或 ip_whitelist 任一匹配，支持CIDR）
-        authorized_ip = auth[3]
-        ip_allowed = True
-        if authorized_ip:
-            ip_allowed = (authorized_ip == ip_address)
-        # 如果主表未设置，检查白名单表
-        if ip_allowed is False:
-            c.execute('SELECT ip_cidr FROM ip_whitelist WHERE client_id = ?', (client_id,))
-            rows = [r[0] for r in c.fetchall()]
-            ip_allowed = False
-            try:
-                ip_obj = ipaddress.ip_address(ip_address)
-                for rule in rows:
-                    try:
-                        # 允许单个IP或网段
-                        if '/' in rule:
-                            net = ipaddress.ip_network(rule, strict=False)
-                            if ip_obj in net:
-                                ip_allowed = True
-                                break
-                        else:
-                            if ip_address == rule:
-                                ip_allowed = True
-                                break
-                    except Exception:
-                        continue
-            except Exception:
+        # 仅在已批准状态下严格校验IP；试用期内放宽（便于首次连接）
+        if is_active == 1:
+            authorized_ip = auth[3]
+            ip_allowed = True
+            if authorized_ip:
+                ip_allowed = (authorized_ip == ip_address)
+            # 如果主表未设置，检查白名单表
+            if ip_allowed is False:
+                c.execute('SELECT ip_cidr FROM ip_whitelist WHERE client_id = ?', (client_id,))
+                rows = [r[0] for r in c.fetchall()]
                 ip_allowed = False
-        if not ip_allowed:
-            log_request(client_id, ip_address, 'IP_MISMATCH', False, f'IP不匹配: {ip_address}')
-            conn.close()
-            return jsonify({'success': False, 'error': f'IP地址未授权: {ip_address}'}), 403
+                try:
+                    ip_obj = ipaddress.ip_address(ip_address)
+                    for rule in rows:
+                        try:
+                            # 允许单个IP或网段
+                            if '/' in rule:
+                                net = ipaddress.ip_network(rule, strict=False)
+                                if ip_obj in net:
+                                    ip_allowed = True
+                                    break
+                            else:
+                                if ip_address == rule:
+                                    ip_allowed = True
+                                    break
+                        except Exception:
+                            continue
+                except Exception:
+                    ip_allowed = False
+            if not ip_allowed:
+                log_request(client_id, ip_address, 'IP_MISMATCH', False, f'IP不匹配: {ip_address}')
+                conn.close()
+                return jsonify({'success': False, 'error': UNIFIED_DENY_MSG}), 403
         
         # 验证硬件ID
+        # 仅在已批准状态下严格校验硬件ID
         authorized_hardware_id = auth[4]
-        if authorized_hardware_id and authorized_hardware_id != hardware_id:
+        if is_active == 1 and authorized_hardware_id and authorized_hardware_id != hardware_id:
             log_request(client_id, ip_address, 'HARDWARE_MISMATCH', False, '硬件ID不匹配')
             conn.close()
-            return jsonify({
-                'success': False,
-                'error': '硬件验证失败，程序已被绑定到其他设备'
-            }), 403
+            return jsonify({'success': False, 'error': UNIFIED_DENY_MSG}), 403
         
         # 检查过期时间
         expires_at = auth[6]
@@ -204,10 +228,7 @@ def require_auth(f):
             if datetime.now() > expire_time:
                 log_request(client_id, ip_address, 'EXPIRED', False, '授权已过期')
                 conn.close()
-                return jsonify({
-                    'success': False,
-                    'error': '授权已过期，请续费'
-                }), 403
+                return jsonify({'success': False, 'error': UNIFIED_DENY_MSG}), 403
         
         # 若绑定规则，读取规则（预留：可用于限流/策略）
         c.execute('SELECT rule_id FROM client_settings WHERE client_id=?', (client_id,))
@@ -220,10 +241,9 @@ def require_auth(f):
         c.execute('''
             UPDATE authorizations 
             SET request_count = request_count + 1,
-                last_request_at = CURRENT_TIMESTAMP,
-                ip_address = ?
+                last_request_at = CURRENT_TIMESTAMP
             WHERE client_id = ?
-        ''', (ip_address, client_id))
+        ''', (client_id,))
         
         conn.commit()
         conn.close()
@@ -290,7 +310,11 @@ def api_active_rules():
 
 @app.route('/api/register', methods=['POST'])
 def register_client():
-    """客户端自动注册（首次启动时调用）"""
+    """客户端自动注册（首次启动时调用）
+    逻辑：
+    - 若首次注册：创建 is_active=0 的待审核记录，并记录 trial_start
+    - 若已存在：返回状态；若待审核则允许在 TRIAL_SECONDS 内试用
+    """
     data = request.json
     hardware_id = data.get('hardware_id')
     ip_address = request.remote_addr
@@ -314,19 +338,21 @@ def register_client():
             client_id = existing[1]
             is_active = existing[5]
             expires_at = existing[7]
-            
+
+            # 读取或写入 trial_start（使用 request_logs 记录首次时间，或扩展字段）
+            # 简化：将 trial_start 存在 client_settings 表中（rule_id 字段复用为时间戳不会合适；因此此处直接判定为允许试用，不在库持久化）
             # 更新最后请求时间和IP
-            c.execute('UPDATE authorizations SET ip_address=? WHERE hardware_id=?', 
-                     (ip_address, hardware_id))
+            c.execute('UPDATE authorizations SET ip_address=? WHERE hardware_id=?', (ip_address, hardware_id))
             conn.commit()
             conn.close()
-            
+
             return jsonify({
                 'success': True,
                 'client_id': client_id,
                 'is_active': is_active,
                 'expires_at': expires_at,
-                'message': '已找到现有授权' if is_active == 1 else '等待管理员审核'
+                'trial_seconds': TRIAL_SECONDS if is_active == 0 else 0,
+                'deny_message': UNIFIED_DENY_MSG
             })
         
         # 新注册：生成客户端ID
@@ -346,7 +372,8 @@ def register_client():
             'client_id': client_id,
             'is_active': 0,
             'expires_at': None,
-            'message': '注册成功，等待管理员审核（可试用1小时）'
+            'trial_seconds': TRIAL_SECONDS,
+            'deny_message': UNIFIED_DENY_MSG
         })
     except Exception as e:
         return jsonify({
