@@ -2,10 +2,10 @@
 """
 智能选品铺货系统 - 终极版客户端
 超级酷炫UI + 动画效果 + 半自动操作
-版本：v10.10.1
+版本：v10.10.2
 """
 
-VERSION = "v10.10.1"
+VERSION = "v10.10.2"
 
 import customtkinter as ctk
 import requests
