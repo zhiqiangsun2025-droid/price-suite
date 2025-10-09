@@ -122,6 +122,8 @@ class UltimateApp(ctk.CTk):
         self.trial_start_time = None
         self.douyin_logged_in = False  # 抖音登录状态
         self.rank_options = {}  # 动态获取的选项
+        self.server_url = SERVER_URL  # 统一服务器地址
+        self.menu_frame = None  # 左侧菜单单例
         
         # 自动注册并初始化
         self.auto_register()
@@ -158,6 +160,9 @@ class UltimateApp(ctk.CTk):
                             self.trial_start_time = None
                             save_config(config)
                             print(f"[调试] 已批准，清除试用时间限制")
+
+                    # 同步内存中的 is_active，避免后续读取旧值
+                    self.is_active = new_is_active
                     
         except Exception as e:
             print(f"[调试] 同步授权状态失败: {e}")
@@ -172,10 +177,10 @@ class UltimateApp(ctk.CTk):
             # 🔥 重要：启动时同步后台授权状态
             self.sync_auth_status()
             
+            # 重新读取配置，确保拿到最新状态
+            config = load_config()
             self.is_active = config.get('is_active', 0)
-            
-            if 'trial_start_time' in config:
-                self.trial_start_time = config['trial_start_time']
+            self.trial_start_time = config.get('trial_start_time')
             
             # 恢复登录状态
             if config.get('douyin_logged_in', False):
@@ -223,8 +228,9 @@ class UltimateApp(ctk.CTk):
         main_container = ctk.CTkFrame(self, fg_color="transparent")
         main_container.pack(fill="both", expand=True, padx=0, pady=0)
         
-        # 左侧菜单
-        self.create_left_menu(main_container)
+        # 左侧菜单（只创建一次）
+        if not self.menu_frame or not self.menu_frame.winfo_exists():
+            self.create_left_menu(main_container)
         
         # 右侧内容区
         self.content_frame = ctk.CTkFrame(main_container, fg_color=Theme.BG_PRIMARY)
@@ -272,8 +278,9 @@ class UltimateApp(ctk.CTk):
             left = TRIAL_DURATION - elapsed
             
             if left <= 0:
-                # 试用期结束，静默提示（不强制退出）
-                self.show_gentle_reminder()
+                # 试用期结束，仅当仍未批准时才提示
+                if self.is_active == 0:
+                    self.show_gentle_reminder()
             else:
                 self.after(60000, update)  # 每分钟检查一次（不是每秒）
         
@@ -281,9 +288,17 @@ class UltimateApp(ctk.CTk):
     
     def create_left_menu(self, parent):
         """创建左侧菜单（仿微信风格）"""
+        # 若已存在菜单，先安全移除再创建，避免双列
+        try:
+            if self.menu_frame and self.menu_frame.winfo_exists():
+                self.menu_frame.destroy()
+        except Exception:
+            pass
+
         menu = ctk.CTkFrame(parent, width=200, fg_color=Theme.BG_SECONDARY, corner_radius=0)
         menu.pack(side="left", fill="y")
         menu.pack_propagate(False)
+        self.menu_frame = menu
         
         # Logo区域（优化间距）
         logo_frame = ctk.CTkFrame(menu, fg_color="transparent", height=100)
