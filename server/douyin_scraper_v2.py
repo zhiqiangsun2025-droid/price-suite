@@ -14,6 +14,9 @@ import json
 import base64
 from io import BytesIO
 from PIL import Image
+import logging
+
+logger = logging.getLogger(__name__)
 
 class DouyinScraperV2:
     def __init__(self, headless=True):
@@ -55,28 +58,28 @@ class DouyinScraperV2:
     def start_login(self, email, password):
         """
         开始登录流程
-        @return: (status, message)
-                 status: 'need_code' - 需要验证码
-                        'success' - 登录成功（不需要验证码）
-                        'error' - 出错
         """
         try:
-            # 打开登录页面
+            # 1. 打开正确的登录页面
+            logger.info("正在打开登录页面: https://fxg.jinritemai.com/login/common")
             self.driver.get('https://fxg.jinritemai.com/login/common')
-            time.sleep(3)
+            time.sleep(2)
             
-            # 切换到邮箱登录
+            # 2. 明确点击“邮箱登录”
             try:
+                logger.info("正在查找并点击'邮箱登录'按钮...")
                 email_tab = self.wait.until(
                     EC.element_to_be_clickable((By.XPATH, "//span[text()='邮箱登录']"))
                 )
                 email_tab.click()
-                time.sleep(1)
-            except:
-                # 可能已经在邮箱登录页面
+                logger.info("✅ 已成功点击'邮箱登录'。")
+                time.sleep(1.5)
+            except Exception as e:
+                logger.warning(f"无法点击'邮箱登录'按钮（可能已在邮箱登录页）: {e}")
                 pass
             
-            # 输入邮箱
+            # 3. 输入账号密码
+            logger.info("正在输入邮箱和密码...")
             email_input = self.wait.until(
                 EC.presence_of_element_located((By.XPATH, "//input[@placeholder='手机号码' or @placeholder='邮箱']"))
             )
@@ -90,52 +93,55 @@ class DouyinScraperV2:
             pwd_input.send_keys(password)
             time.sleep(0.5)
             
-            # 勾选协议
+            # 4. 勾选协议
+            logger.info("正在勾选用户协议...")
             try:
-                checkbox = self.driver.find_element(By.CSS_SELECTOR, "input[type='checkbox']")
-                if not checkbox.is_selected():
-                    # 点击checkbox的父元素（有些页面点checkbox本身无效）
-                    self.driver.execute_script("arguments[0].click();", checkbox)
-                time.sleep(0.5)
-            except:
+                agreement_box = self.wait.until(
+                    EC.element_to_be_clickable((By.XPATH, "//*[@data-icon='check-square-filled']"))
+                )
+                agreement_box.click()
+                logger.info("✅ 已成功勾选协议。")
+            except Exception:
+                logger.warning("未找到协议勾选框，可能已勾选或页面结构变化。")
                 pass
             
-            # 点击登录按钮
+            # 5. 点击登录按钮
+            logger.info("正在点击'登录'按钮...")
             login_btn = self.driver.find_element(By.XPATH, "//button[contains(text(), '登录')]")
             login_btn.click()
             time.sleep(3)
             
-            # 检测是否需要验证码
-            try:
-                # 检查是否有验证码输入框
-                code_input = self.driver.find_element(By.XPATH, "//input[@placeholder='验证码' or contains(@placeholder, '验证码')]")
+            # 6. 判断登录结果
+            time.sleep(3) # 等待页面跳转或出现验证码
+            current_url = self.driver.current_url
+            logger.info(f"点击登录后，当前URL: {current_url}")
+            
+            # 如果页面包含 'captcha'，说明需要验证码
+            if 'captcha' in current_url or self.driver.find_elements(By.ID, "captcha-wait-img"):
                 self.login_status = "need_code"
-                return "need_code", "需要输入邮箱验证码"
+                logger.info("登录状态：需要验证码。")
+                return "need_code", "需要输入验证码"
+            
+            # 如果页面跳转到首页，说明登录成功
+            if 'homepage' in current_url:
+                self.login_status = "logged_in"
+                logger.info("🎉 登录状态：成功！")
+                return "success", "登录成功"
+
+            # 其他情况，检查页面是否有错误提示
+            try:
+                error_elements = self.driver.find_elements(By.XPATH, "//*[contains(@class, 'Toastify__toast-body')] | //*[contains(@class, 'error-message')]")
+                if error_elements:
+                    error_text = error_elements[0].text
+                    logger.error(f"登录失败，页面提示: {error_text}")
+                    self.login_status = "failed"
+                    return "error", error_text
             except:
                 pass
-            
-            # 检查是否登录成功（URL变化或出现特定元素）
-            current_url = self.driver.current_url
-            if 'homepage' in current_url or 'mshop' in current_url:
-                self.login_status = "logged_in"
-                return "success", "登录成功"
-            
-            # 等待一下看是否跳转
-            time.sleep(5)
-            current_url = self.driver.current_url
-            if 'homepage' in current_url or 'mshop' in current_url:
-                self.login_status = "logged_in"
-                return "success", "登录成功"
-            
-            # 再次检查验证码
-            try:
-                code_input = self.driver.find_element(By.XPATH, "//input[@placeholder='验证码' or contains(@placeholder, '验证码')]")
-                self.login_status = "need_code"
-                return "need_code", "需要输入邮箱验证码"
-            except:
-                pass
-            
-            return "error", "登录状态未知"
+
+            logger.error("登录失败，未知状态。")
+            self.login_status = "failed"
+            return "error", "登录失败，未知状态"
         
         except Exception as e:
             self.login_status = "failed"

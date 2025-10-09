@@ -367,8 +367,8 @@ class UltimateApp(ctk.CTk):
         self.pwd_entry.insert(0, "Ping99re.com")
         self.pwd_entry.pack(padx=40)
         
-        # 登录按钮
-        self.login_btn = ctk.CTkButton(
+        # 开始登录按钮
+        self.douyin_login_btn = ctk.CTkButton(
             left,
             text="🚀 开始登录",
             font=ctk.CTkFont(size=18, weight="bold"),
@@ -379,18 +379,18 @@ class UltimateApp(ctk.CTk):
             corner_radius=30,
             command=self.start_douyin_login
         )
-        self.login_btn.pack(pady=30)
+        self.douyin_login_btn.pack(pady=30)
         
         # 进度提示
-        self.login_progress = ctk.CTkLabel(
+        self.douyin_progress_label = ctk.CTkLabel(
             left,
             text="",
             font=ctk.CTkFont(size=13),
             text_color=Theme.YELLOW
         )
-        self.login_progress.pack(pady=(0,30))
+        self.douyin_progress_label.pack(pady=(0,30))
         
-        # 右侧：实时预览
+        # 右侧：实时截图预览
         right = ctk.CTkFrame(cols, fg_color=Theme.CARD_BG, corner_radius=20)
         right.pack(side="right", fill="both", expand=True, padx=(15,0))
         
@@ -404,17 +404,22 @@ class UltimateApp(ctk.CTk):
         # 截图显示
         self.screenshot_label = ctk.CTkLabel(
             right,
-            text="🌐\n\n登录后将实时显示页面截图\n让您全程掌握登录进度",
+            text="🌐\n\n登录后将显示实时页面截图\n\n让您实时了解登录进度",
             font=ctk.CTkFont(size=14),
             text_color=Theme.TEXT_HINT,
             justify="center"
         )
-        self.screenshot_label.pack(pady=30, padx=30, expand=True)
+        self.screenshot_label.pack(pady=20, padx=20, expand=True)
         
+        # 停止截图轮询的标志
         self.screenshot_polling = False
-    
+
     def start_douyin_login(self):
-        """开始登录（异步）"""
+        """开始登录抖音，并启动截图轮询"""
+        if self.screenshot_polling:
+            self.show_error_toast("错误", "登录正在进行中，请勿重复点击。")
+            return
+
         email = self.email_entry.get()
         password = self.pwd_entry.get()
         
@@ -423,13 +428,13 @@ class UltimateApp(ctk.CTk):
             return
         
         # 禁用按钮
-        self.login_btn.configure(state="disabled", text="登录中...")
-        self.login_progress.configure(text="🔄 正在连接抖店...")
+        self.douyin_login_btn.configure(state="disabled", text="登录中...")
+        self.douyin_progress_label.configure(text="🔄 正在连接抖店...")
         self.douyin_status_label.configure(text="🔄 登录中...", text_color=Theme.YELLOW)
         
-        # 启动截图轮询
+        # 设置轮询标志并启动
         self.screenshot_polling = True
-        self.after(1000, self.poll_screenshot)
+        self.poll_screenshot()
         
         # 异步登录
         threading.Thread(target=self._login_thread, args=(email, password), daemon=True).start()
@@ -462,7 +467,7 @@ class UltimateApp(ctk.CTk):
             
             # 验证码处理
             if status == 'need_code':
-                self.after(0, lambda: self.login_progress.configure(text="📧 需要邮箱验证码，请查收..."))
+                self.after(0, lambda: self.douyin_progress_label.configure(text="📧 需要邮箱验证码，请查收..."))
                 
                 code = self.after(0, self.show_code_dialog)
                 if not code:
@@ -470,7 +475,7 @@ class UltimateApp(ctk.CTk):
                     return
                 
                 # 提交验证码
-                self.after(0, lambda: self.login_progress.configure(text="🔄 正在提交验证码..."))
+                self.after(0, lambda: self.douyin_progress_label.configure(text="🔄 正在提交验证码..."))
                 
                 response = requests.post(
                     f"{SERVER_URL}/api/douyin-submit-code",
@@ -493,8 +498,8 @@ class UltimateApp(ctk.CTk):
     def _login_success(self):
         """登录成功"""
         self.screenshot_polling = False
-        self.login_btn.configure(state="normal", text="✓ 已登录")
-        self.login_progress.configure(text="✅ 登录成功！现在可以进行智能选品了")
+        self.douyin_login_btn.configure(state="normal", text="✓ 已登录")
+        self.douyin_progress_label.configure(text="✅ 登录成功！正在跳转...")
         self.douyin_status_label.configure(text="✅ 已登录", text_color=Theme.GREEN)
         
         # 成功动画
@@ -503,44 +508,49 @@ class UltimateApp(ctk.CTk):
     def _login_failed(self, error):
         """登录失败"""
         self.screenshot_polling = False
-        self.login_btn.configure(state="normal", text="🚀 重新登录")
-        self.login_progress.configure(text="❌ 登录失败")
+        self.douyin_login_btn.configure(state="normal", text="🚀 重新登录")
+        self.douyin_progress_label.configure(text="❌ 登录失败")
         self.douyin_status_label.configure(text="❌ 未登录", text_color=Theme.RED)
         messagebox.showerror("登录失败", error)
     
     def _login_cancelled(self):
         """取消登录"""
         self.screenshot_polling = False
-        self.login_btn.configure(state="normal", text="🚀 开始登录")
-        self.login_progress.configure(text="")
+        self.douyin_login_btn.configure(state="normal", text="🚀 开始登录")
+        self.douyin_progress_label.configure(text="")
         self.douyin_status_label.configure(text="⭕ 未登录", text_color=Theme.TEXT_SECONDARY)
     
     def poll_screenshot(self):
-        """轮询截图"""
+        """轮询获取截图"""
         if not self.screenshot_polling:
             return
-        
-        try:
-            headers = {
-                'X-Client-ID': self.client_id,
-                'X-Hardware-ID': self.hardware_id,
-            }
-            
-            response = requests.post(
-                f"{SERVER_URL}/api/douyin-screenshot",
-                headers=headers,
-                timeout=5
-            )
-            
-            if response.ok:
-                result = response.json()
-                if result.get('success') and result.get('screenshot'):
-                    self.display_screenshot(result['screenshot'])
-        except:
-            pass
-        
-        if self.screenshot_polling:
-            self.after(2000, self.poll_screenshot)
+
+        def task():
+            try:
+                headers = {
+                    'X-Client-ID': self.client_id,
+                    'X-Hardware-ID': self.hardware_id,
+                }
+                
+                response = requests.post(
+                    f"{SERVER_URL}/api/douyin-screenshot",
+                    headers=headers,
+                    timeout=5
+                )
+                
+                if response.ok:
+                    result = response.json()
+                    if result.get('success') and result.get('screenshot'):
+                        self.display_screenshot(result['screenshot'])
+                # 2-3秒后再次轮询
+                if self.screenshot_polling:
+                    self.after(2500, self.poll_screenshot)
+            except:
+                # 2-3秒后再次轮询
+                if self.screenshot_polling:
+                    self.after(2500, self.poll_screenshot)
+
+        threading.Thread(target=task, daemon=True).start()
     
     def display_screenshot(self, base64_img):
         """显示截图"""

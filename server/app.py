@@ -1174,13 +1174,13 @@ def douyin_cleanup(auth):
 
 
 if __name__ == '__main__':
-    print("=" * 60)
-    print("商品价格对比系统 - 服务器端")
-    print("=" * 60)
-    print(f"数据库路径: {os.path.abspath(DB_PATH)}")
-    print(f"启动时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("=" * 60)
-    
-    # 生产环境建议使用 gunicorn 或 uwsgi
+    init_db()
+    logger.info("============================================================")
+    logger.info("智能选品系统 - 服务器端")
+    logger.info("============================================================")
+    logger.info(f"数据库路径: {os.path.abspath(DB_PATH)}")
+    logger.info(f"启动时间: {get_beijing_time()}")
+    logger.info(f"管理后台: http://127.0.0.1:5000/admin/login")
+    logger.info("============================================================")
     app.run(host='0.0.0.0', port=5000, debug=False)
 
