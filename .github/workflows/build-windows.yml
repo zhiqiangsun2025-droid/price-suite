@@ -23,22 +23,42 @@ jobs:
         python -m pip install --upgrade pip
         pip install customtkinter requests pillow pandas openpyxl pyinstaller
     
-    - name: Build EXE
+    - name: Build Simple Test EXE
+      run: |
+        cd client
+        pyinstaller --onefile --noconsole --name=智能选品系统测试版 simple_client.py
+      shell: cmd
+      continue-on-error: true
+    
+    - name: Build Full EXE
       run: |
         cd client
         pyinstaller --onefile --noconsole --name=智能选品系统 modern_client.py
       shell: cmd
+      continue-on-error: true
     
     - name: List build output
       run: |
         dir client\dist
+      shell: cmd
     
-    - name: Upload EXE
+    - name: Upload Test EXE
+      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: 智能选品系统
+        name: 测试版
+        path: client/dist/智能选品系统测试版.exe
+        retention-days: 90
+        if-no-files-found: warn
+    
+    - name: Upload Full EXE
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: 完整版
         path: client/dist/智能选品系统.exe
         retention-days: 90
+        if-no-files-found: warn
     
     - name: Upload to Release (if tagged)
       if: startsWith(github.ref, 'refs/tags/')
