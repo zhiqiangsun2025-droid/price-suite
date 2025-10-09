@@ -787,7 +787,7 @@ class UltimateApp(ctk.CTk):
         
         self.result_label = ctk.CTkLabel(
             self.result_frame,
-            text="暂无数据\n\n请点击上方"开始智能选品"按钮",
+            text="暂无数据\n\n请点击上方【开始智能选品】按钮",
             font=ctk.CTkFont(size=14),
             text_color=Theme.TEXT_HINT
         )
@@ -991,44 +991,95 @@ class UltimateApp(ctk.CTk):
         self.after(3000, dialog.destroy)
     
     def show_gentle_reminder(self):
-        """友好提示（不占满屏幕）"""
-        # 创建一个小弹窗，不影响主界面
+        """友好提示（带二维码，用于获客）"""
+        # 创建一个弹窗（稍大一点，显示二维码）
         dialog = ctk.CTkToplevel(self)
         dialog.title("提示")
-        dialog.geometry("400x200")
+        dialog.geometry("450x550")
         dialog.configure(fg_color=Theme.CARD_BG)
         dialog.transient(self)
         dialog.grab_set()
         
         # 居中
         dialog.update_idletasks()
-        x = (dialog.winfo_screenwidth() // 2) - 200
-        y = (dialog.winfo_screenheight() // 2) - 100
-        dialog.geometry(f'400x200+{x}+{y}')
+        x = (dialog.winfo_screenwidth() // 2) - 225
+        y = (dialog.winfo_screenheight() // 2) - 275
+        dialog.geometry(f'450x550+{x}+{y}')
         
         ctk.CTkLabel(
             dialog,
-            text="💡 提示",
-            font=ctk.CTkFont(size=20, weight="bold"),
+            text="💡 温馨提示",
+            font=ctk.CTkFont(size=22, weight="bold"),
             text_color=Theme.ORANGE
         ).pack(pady=(30,15))
         
         ctk.CTkLabel(
             dialog,
-            text="软件功能升级中\n如有疑问请联系客服",
+            text="软件功能升级中\n如需咨询请扫码联系客服",
             font=ctk.CTkFont(size=14),
             text_color=Theme.TEXT_SECONDARY,
             justify="center"
         ).pack(pady=10)
         
-        ctk.CTkButton(
+        # 二维码区域（占位图）
+        qr_frame = ctk.CTkFrame(dialog, fg_color=Theme.BG_SECONDARY, width=280, height=280, corner_radius=15)
+        qr_frame.pack(pady=20)
+        qr_frame.pack_propagate(False)
+        
+        # 二维码标题
+        ctk.CTkLabel(
+            qr_frame,
+            text="扫码添加客服微信",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color=Theme.GREEN
+        ).pack(pady=(20,10))
+        
+        # 二维码图片（这里用文字占位，实际使用时替换为真实二维码）
+        qr_placeholder = ctk.CTkFrame(qr_frame, fg_color="white", width=200, height=200, corner_radius=10)
+        qr_placeholder.pack(pady=10)
+        qr_placeholder.pack_propagate(False)
+        
+        ctk.CTkLabel(
+            qr_placeholder,
+            text="📱\n\n微信二维码\n\n扫码咨询",
+            font=ctk.CTkFont(size=14),
+            text_color="black",
+            justify="center"
+        ).pack(expand=True)
+        
+        # 提示文字
+        ctk.CTkLabel(
             dialog,
+            text=f"或添加QQ: {CONTACT_QQ}",
+            font=ctk.CTkFont(size=12),
+            text_color=Theme.TEXT_HINT
+        ).pack(pady=5)
+        
+        # 按钮
+        btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_frame.pack(pady=20)
+        
+        ctk.CTkButton(
+            btn_frame,
             text="知道了",
-            width=120,
-            height=40,
+            width=140,
+            height=45,
             fg_color=Theme.ORANGE,
+            hover_color=self.darken_color(Theme.ORANGE),
+            font=ctk.CTkFont(size=14, weight="bold"),
             command=dialog.destroy
-        ).pack(pady=20)
+        ).pack(side="left", padx=5)
+        
+        ctk.CTkButton(
+            btn_frame,
+            text="继续使用",
+            width=140,
+            height=45,
+            fg_color=Theme.GREEN,
+            hover_color=self.darken_color(Theme.GREEN),
+            font=ctk.CTkFont(size=14, weight="bold"),
+            command=dialog.destroy
+        ).pack(side="left", padx=5)
     
     def show_error(self, error_code, error_msg):
         """显示错误（友好版，不占满屏幕）"""
