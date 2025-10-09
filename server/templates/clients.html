@@ -3,7 +3,9 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h5 class="m-0">📱 客户端管理</h5>
-  <a class="btn btn-primary" href="{{ url_for('admin_client_new') }}">+ 新增客户端</a>
+  <div class="alert alert-info mb-0 py-2 px-3" style="font-size: 13px;">
+    💡 客户端会自动注册，您只需批准或拒绝即可
+  </div>
 </div>
 <form class="row g-2 mb-3" method="get">
   <div class="col-auto">
@@ -102,19 +104,57 @@
 
 <script>
 function copyText(text) {
-  navigator.clipboard.writeText(text).then(() => {
-    // 创建提示元素
-    const toast = document.createElement('div');
-    toast.className = 'alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3';
-    toast.style.zIndex = '9999';
-    toast.innerHTML = '✓ 已复制客户端ID';
-    document.body.appendChild(toast);
-    
-    // 3秒后移除
-    setTimeout(() => toast.remove(), 3000);
-  }).catch(err => {
-    alert('复制失败：' + err);
-  });
+  // 方案1：使用Clipboard API（需要HTTPS）
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('✓ 已复制客户端ID');
+    }).catch(err => {
+      // 失败，使用方案2
+      fallbackCopy(text);
+    });
+  } else {
+    // 方案2：使用传统方法（兼容HTTP）
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  // 创建临时textarea
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  
+  // 选择并复制
+  textarea.select();
+  textarea.setSelectionRange(0, 99999); // 兼容移动设备
+  
+  let success = false;
+  try {
+    success = document.execCommand('copy');
+  } catch (err) {
+    console.error('复制失败:', err);
+  }
+  
+  document.body.removeChild(textarea);
+  
+  if (success) {
+    showToast('✓ 已复制客户端ID');
+  } else {
+    // 如果还是失败，显示选择框让用户手动复制
+    prompt('复制失败，请手动复制（Ctrl+C）:', text);
+  }
+}
+
+function showToast(message) {
+  const toast = document.createElement('div');
+  toast.className = 'alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3';
+  toast.style.zIndex = '9999';
+  toast.innerHTML = message;
+  document.body.appendChild(toast);
+  
+  setTimeout(() => toast.remove(), 3000);
 }
 </script>
 
