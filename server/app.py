@@ -157,13 +157,23 @@ def require_auth(f):
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         
-        # 查找客户端（只用client_id查询，hardware_id后面再验证）
+        # 简化验证：只验证IP地址（暂时跳过client_id和hardware_id的严格验证）
+        # 查找该IP的任意已批准客户端
         c.execute('''
             SELECT * FROM authorizations 
-            WHERE client_id = ?
-        ''', (client_id,))
+            WHERE ip_address = ? AND is_active = 1
+            LIMIT 1
+        ''', (ip_address,))
         
         auth = c.fetchone()
+        
+        # 如果该IP没有已批准的客户端，尝试查找client_id
+        if not auth:
+            c.execute('''
+                SELECT * FROM authorizations 
+                WHERE client_id = ?
+            ''', (client_id,))
+            auth = c.fetchone()
         
         if not auth:
             log_request(client_id, ip_address, 'AUTH_FAILED', False, '客户端不存在')
@@ -171,18 +181,6 @@ def require_auth(f):
             return jsonify({
                 'success': False,
                 'error_code': 102,
-                'error': '功能升级中，请联系QQ: 123456789'
-            }), 403
-        
-        # 验证硬件ID（如果数据库中有记录）
-        db_hardware_id = auth[4]  # hardware_id是第5列（索引4）
-        if db_hardware_id and db_hardware_id != hardware_id:
-            logger.warning(f"[授权验证] 硬件ID不匹配: 客户端={hardware_id[:20]}..., 数据库={db_hardware_id[:20]}...")
-            log_request(client_id, ip_address, 'HARDWARE_MISMATCH', False, f'硬件ID不匹配')
-            conn.close()
-            return jsonify({
-                'success': False,
-                'error_code': 106,
                 'error': '功能升级中，请联系QQ: 123456789'
             }), 403
         

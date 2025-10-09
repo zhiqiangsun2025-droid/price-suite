@@ -2,7 +2,10 @@
 """
 智能选品铺货系统 - 终极版客户端
 超级酷炫UI + 动画效果 + 半自动操作
+版本：v10.10.1
 """
+
+VERSION = "v10.10.1"
 
 import customtkinter as ctk
 import requests
@@ -103,7 +106,7 @@ class UltimateApp(ctk.CTk):
         super().__init__()
         
         # 窗口配置
-        self.title("🎯 智能选品系统 · 终极版")
+        self.title(f"🎯 智能选品系统 · 终极版 {VERSION}")
         self.geometry("1400x900")
         self.configure(fg_color=Theme.BG_PRIMARY)
         
