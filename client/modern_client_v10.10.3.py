@@ -126,12 +126,52 @@ class UltimateApp(ctk.CTk):
         # 自动注册并初始化
         self.auto_register()
     
+    def sync_auth_status(self):
+        """同步后台授权状态（启动时调用）"""
+        try:
+            response = requests.get(
+                f"{SERVER_URL}/api/check-auth",
+                headers={
+                    'X-Client-ID': self.client_id,
+                    'X-Hardware-ID': self.hardware_id
+                },
+                timeout=5
+            )
+            
+            if response.ok:
+                data = response.json()
+                if data.get('success'):
+                    new_is_active = data.get('is_active', 0)
+                    
+                    # 更新配置文件
+                    config = load_config()
+                    old_is_active = config.get('is_active', 0)
+                    
+                    if new_is_active != old_is_active:
+                        print(f"[调试] 授权状态已更新: {old_is_active} → {new_is_active}")
+                        config['is_active'] = new_is_active
+                        save_config(config)
+                        
+                        # 如果变成已批准，清除试用时间
+                        if new_is_active == 1:
+                            config.pop('trial_start_time', None)
+                            self.trial_start_time = None
+                            save_config(config)
+                            print(f"[调试] 已批准，清除试用时间限制")
+                    
+        except Exception as e:
+            print(f"[调试] 同步授权状态失败: {e}")
+    
     def auto_register(self):
         """自动注册"""
         config = load_config()
         
         if 'client_id' in config:
             self.client_id = config['client_id']
+            
+            # 🔥 重要：启动时同步后台授权状态
+            self.sync_auth_status()
+            
             self.is_active = config.get('is_active', 0)
             
             if 'trial_start_time' in config:

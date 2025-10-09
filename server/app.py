@@ -947,6 +947,37 @@ def search_pinduoduo(keyword):
         }
     ]
 
+# ==================== 授权状态同步API ====================
+
+@app.route('/api/check-auth', methods=['GET'])
+def check_auth():
+    """
+    检查客户端授权状态（用于启动时同步）
+    不使用 @require_auth 装饰器，避免403拦截
+    """
+    client_id = request.headers.get('X-Client-ID')
+    
+    if not client_id:
+        return jsonify({'success': False, 'error': '缺少客户端ID'}), 400
+    
+    conn = get_db()
+    c = conn.cursor()
+    
+    c.execute('SELECT is_active FROM authorizations WHERE client_id = ?', (client_id,))
+    auth = c.fetchone()
+    
+    if auth:
+        return jsonify({
+            'success': True,
+            'is_active': auth['is_active']
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'error': '未找到授权记录'
+        }), 404
+
+
 # ==================== 抖店爬虫API（支持验证码交互） ====================
 
 # 全局爬虫实例池（key: client_id, value: scraper_instance）
