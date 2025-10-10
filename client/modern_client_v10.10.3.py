@@ -5,7 +5,7 @@
 版本：v10.10.3
 """
 
-VERSION = "v10.10.3"
+VERSION = "v10.10.4"
 
 import customtkinter as ctk
 import requests
@@ -270,7 +270,7 @@ class UltimateApp(ctk.CTk):
         # 只显示软件名称和版本（不显示授权状态）
         title = ctk.CTkLabel(
             status_bar,
-            text="🎯 智能选品系统 v2.0",
+            text=f"🎯 智能选品系统 {VERSION}",
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color=Theme.TEXT_PRIMARY
         )
