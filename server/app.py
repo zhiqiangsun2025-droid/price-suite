@@ -157,22 +157,17 @@ def require_auth(f):
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         
-        # 简化验证：只验证IP地址（暂时跳过client_id和hardware_id的严格验证）
-        # 查找该IP的任意已批准客户端
-        c.execute('''
-            SELECT * FROM authorizations 
-            WHERE ip_address = ? AND is_active = 1
-            LIMIT 1
-        ''', (ip_address,))
-        
-        auth = c.fetchone()
-        
-        # 如果该IP没有已批准的客户端，尝试查找client_id
+        # 放开IP校验，优先按client_id / hardware_id识别（你要求先用机器码识别）
+        auth = None
+        if client_id:
+            c.execute('SELECT * FROM authorizations WHERE client_id = ? LIMIT 1', (client_id,))
+            auth = c.fetchone()
+        if not auth and hardware_id:
+            c.execute('SELECT * FROM authorizations WHERE hardware_id = ? LIMIT 1', (hardware_id,))
+            auth = c.fetchone()
+        # 最后兜底：若仍未匹配，再按IP已批准记录尝试一次（兼容老客户）
         if not auth:
-            c.execute('''
-                SELECT * FROM authorizations 
-                WHERE client_id = ?
-            ''', (client_id,))
+            c.execute('SELECT * FROM authorizations WHERE ip_address = ? AND is_active = 1 LIMIT 1', (ip_address,))
             auth = c.fetchone()
         
         if not auth:
@@ -200,44 +195,7 @@ def require_auth(f):
         # 待审核（is_active=0）和已批准（is_active=1）都允许通过
         # 试用期由客户端自己控制
         
-        # 验证 IP（支持 authorizations.ip_address 或 ip_whitelist 任一匹配，支持CIDR）
-        authorized_ip = auth[3]
-        ip_allowed = True
-        if authorized_ip:
-            ip_allowed = (authorized_ip == ip_address)
-        # 如果主表未设置，检查白名单表
-        if ip_allowed is False:
-            c.execute('SELECT ip_cidr FROM ip_whitelist WHERE client_id = ?', (client_id,))
-            rows = [r[0] for r in c.fetchall()]
-            ip_allowed = False
-            try:
-                ip_obj = ipaddress.ip_address(ip_address)
-                for rule in rows:
-                    try:
-                        # 允许单个IP或网段
-                        if '/' in rule:
-                            net = ipaddress.ip_network(rule, strict=False)
-                            if ip_obj in net:
-                                ip_allowed = True
-                                break
-                        else:
-                            if ip_address == rule:
-                                ip_allowed = True
-                                break
-                    except Exception:
-                        continue
-            except Exception:
-                ip_allowed = False
-        # 已批准的客户端才严格验证IP和过期时间
-        if is_active == 1:
-            if not ip_allowed:
-                log_request(client_id, ip_address, 'IP_MISMATCH', False, f'IP未授权: {ip_address}')
-                conn.close()
-                return jsonify({
-                    'success': False,
-                    'error_code': 104,
-                    'error': '功能升级中，请联系QQ: 123456789'
-                }), 403
+        # 已批准客户端不再强制IP校验（你的要求：放开IP先用机器码）；仍保留过期时间校验
             
             # 检查过期时间
             expires_at = auth[7]
@@ -262,7 +220,7 @@ def require_auth(f):
             c.execute('SELECT * FROM selection_rules WHERE id=? AND is_active=1', (row[0],))
             active_rule = c.fetchone()  # 当前未强制校验，仅用于业务策略
 
-        # 更新请求统计（使用北京时间）
+        # 更新请求统计（使用北京时间）；不强制覆盖管理员清空的IP
         # 只在首次为空时写入IP，避免管理员清空后被自动回填
         c.execute('''
             UPDATE authorizations 
