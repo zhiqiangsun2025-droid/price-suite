@@ -162,7 +162,7 @@ def init_db():
     c.execute('CREATE INDEX IF NOT EXISTS idx_event_client_time ON event_logs(client_id, created_at)')
     c.execute('CREATE INDEX IF NOT EXISTS idx_ipwl_client ON ip_whitelist(client_id)')
     c.execute('CREATE INDEX IF NOT EXISTS idx_rules_active ON selection_rules(is_active, updated_at)')
-
+    
     conn.commit()
     conn.close()
 
@@ -248,7 +248,7 @@ def require_auth(f):
         # 最后兜底：若仍未匹配，再按IP已批准记录尝试一次（兼容老客户）
         if not auth:
             c.execute('SELECT * FROM authorizations WHERE ip_address = ? AND is_active = 1 LIMIT 1', (ip_address,))
-            auth = c.fetchone()
+        auth = c.fetchone()
         
         if not auth:
             # 首次出现client_id也给予试用（按 hardware 限日）
@@ -278,16 +278,16 @@ def require_auth(f):
             authorized, left, reason = _grant_or_validate_trial(c, client_id, hardware_id, ip_address)
             conn.commit()
             if not authorized:
-                conn.close()
+            conn.close()
                 return jsonify({'success': False, 'show_popup': True, 'reason': reason or 'trial_expired'}), 403
-
+        
         # 过期时间（如配置）
         expires_at = auth[7]
         if expires_at:
             try:
-                expire_time = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
-                if datetime.now() > expire_time:
-                    conn.close()
+            expire_time = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
+            if datetime.now() > expire_time:
+                conn.close()
                     return jsonify({'success': False, 'show_popup': True, 'reason': 'auth_expired'}), 403
             except Exception:
                 pass
@@ -317,7 +317,7 @@ def require_auth(f):
         if 'auth' in sig.parameters:
             return f(auth, *args, **kwargs)
         else:
-            return f(*args, **kwargs)
+        return f(*args, **kwargs)
     
     return decorated_function
 
@@ -427,14 +427,14 @@ def register_client():
             # 更新最后请求时间和IP
             c.execute('UPDATE authorizations SET ip_address=? WHERE hardware_id=?', 
                      (ip_address, hardware_id))
-            conn.commit()
-            conn.close()
-            
-            return jsonify({
-                'success': True,
-                'client_id': client_id,
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'client_id': client_id,
                 'is_active': is_active,
-                'expires_at': expires_at,
+            'expires_at': expires_at,
                 'message': '已找到现有授权' if is_active == 1 else '等待管理员审核'
             })
         
