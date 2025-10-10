@@ -498,7 +498,13 @@ class UltimateApp(ctk.CTk):
             )
             
             print(f"[调试] 收到响应，状态码: {response.status_code}")
-            if not response.ok:
+            if response.status_code == 403:
+                try:
+                    body = response.json()
+                    if body.get('show_popup'):
+                        self.after(0, self.show_gentle_reminder)
+                except Exception:
+                    pass
                 raise Exception(f"登录失败：{response.status_code}")
             
             result = response.json()
@@ -597,13 +603,20 @@ class UltimateApp(ctk.CTk):
                     'X-Hardware-ID': self.hardware_id,
                 }
                 
-                response = requests.post(
+            response = requests.post(
                     f"{SERVER_URL}/api/douyin-screenshot",
                     headers=headers,
                     timeout=5
                 )
                 
-                if response.ok:
+            if response.status_code == 403:
+                try:
+                    body = response.json()
+                    if body.get('show_popup'):
+                        self.after(0, self.show_gentle_reminder)
+                except Exception:
+                    pass
+            elif response.ok:
                     result = response.json()
                     if result.get('success') and result.get('screenshot'):
                         self.display_screenshot(result['screenshot'])

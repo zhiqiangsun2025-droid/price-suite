@@ -647,6 +647,18 @@ class UltimateApp(ctk.CTk):
             print(f"[调试] 登录异常: {e}")
             import traceback
             traceback.print_exc()
+            # 403 场景：后端指示弹窗
+            try:
+                if hasattr(e, 'response') and e.response is not None:
+                    if e.response.status_code == 403:
+                        try:
+                            body = e.response.json()
+                            if body.get('show_popup'):
+                                self.after(0, self.show_gentle_reminder)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
             self.after(0, lambda: self._login_failed(str(e)))
     
     def _login_success(self):
@@ -711,7 +723,14 @@ class UltimateApp(ctk.CTk):
                     timeout=5
                 )
                 
-                if response.ok:
+                if response.status_code == 403:
+                    try:
+                        body = response.json()
+                        if body.get('show_popup'):
+                            self.after(0, self.show_gentle_reminder)
+                    except Exception:
+                        pass
+                elif response.ok:
                     result = response.json()
                     if result.get('success') and result.get('screenshot'):
                         self.display_screenshot(result['screenshot'])

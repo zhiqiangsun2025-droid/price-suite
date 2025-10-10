@@ -12,6 +12,7 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash
 from flask_cors import CORS
 from functools import wraps
+import inspect
 import hashlib
 import json
 import time
@@ -57,7 +58,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
-    # 授权表
+    # 授权表（总开关）
     c.execute('''
         CREATE TABLE IF NOT EXISTS authorizations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,7 +74,23 @@ def init_db():
         )
     ''')
     
-    # 请求日志表
+    # 指纹访问与试用（后端为唯一真相）
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS client_access (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id TEXT NOT NULL,
+            hardware_id TEXT,
+            ip_address TEXT,
+            first_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            trial_started_at TIMESTAMP,
+            trial_expires_at TIMESTAMP,
+            last_trial_granted_at DATE,
+            approved INTEGER DEFAULT 0
+        )
+    ''')
+
+    # 请求日志表（保留）
     c.execute('''
         CREATE TABLE IF NOT EXISTS request_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,6 +99,19 @@ def init_db():
             request_type TEXT,
             success INTEGER,
             error_msg TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    # 事件埋点表（前端重要操作上报）
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS event_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id TEXT,
+            hardware_id TEXT,
+            ip_address TEXT,
+            action TEXT,
+            detail_json TEXT,
+            success INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -127,6 +157,9 @@ def init_db():
     # 索引
     c.execute('CREATE INDEX IF NOT EXISTS idx_auth_client_id ON authorizations(client_id)')
     c.execute('CREATE INDEX IF NOT EXISTS idx_logs_client_time ON request_logs(client_id, created_at)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_access_client_hw_ip ON client_access(client_id, hardware_id, ip_address)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_access_trial_expires ON client_access(trial_expires_at)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_event_client_time ON event_logs(client_id, created_at)')
     c.execute('CREATE INDEX IF NOT EXISTS idx_ipwl_client ON ip_whitelist(client_id)')
     c.execute('CREATE INDEX IF NOT EXISTS idx_rules_active ON selection_rules(is_active, updated_at)')
 
@@ -137,8 +170,54 @@ init_db()
 
 # ==================== 授权验证装饰器 ====================
 
+TRIAL_SECONDS = 3600  # 后端统一控制：1小时
+
+def _grant_or_validate_trial(c, client_id: str, hardware_id: str, ip_address: str):
+    """授予或校验试用资格：同一hardware每天仅发一次。返回(authorized, trial_remaining_seconds, reason)。"""
+    now = datetime.now()
+    today = now.strftime('%Y-%m-%d')
+
+    # 查询指纹记录
+    c.execute('''SELECT id, trial_started_at, trial_expires_at, last_trial_granted_at, approved
+                 FROM client_access WHERE client_id=? AND hardware_id=? AND ip_address=? LIMIT 1''',
+              (client_id, hardware_id, ip_address))
+    row = c.fetchone()
+
+    # 已显式批准
+    if row and row[4] == 1:
+        return True, None, None
+
+    # 试用有效
+    if row and row[2]:
+        try:
+            exp = datetime.strptime(row[2], '%Y-%m-%d %H:%M:%S')
+            if now < exp:
+                return True, int((exp - now).total_seconds()), None
+        except Exception:
+            pass
+
+    # 是否当天已发放
+    if row and row[3] == today:
+        return False, 0, 'daily_quota_exhausted'
+
+    # 发放试用
+    start = now
+    exp = now + timedelta(seconds=TRIAL_SECONDS)
+    if row:
+        c.execute('''UPDATE client_access SET trial_started_at=?, trial_expires_at=?, last_seen_at=?, last_trial_granted_at=?
+                     WHERE id=?''',
+                  (start.strftime('%Y-%m-%d %H:%M:%S'), exp.strftime('%Y-%m-%d %H:%M:%S'),
+                   get_beijing_time(), today, row[0]))
+    else:
+        c.execute('''INSERT INTO client_access (client_id, hardware_id, ip_address, trial_started_at, trial_expires_at, last_trial_granted_at)
+                     VALUES (?,?,?,?,?,?)''',
+                  (client_id, hardware_id, ip_address, start.strftime('%Y-%m-%d %H:%M:%S'),
+                   exp.strftime('%Y-%m-%d %H:%M:%S'), today))
+    return True, TRIAL_SECONDS, None
+
+
 def require_auth(f):
-    """授权验证装饰器（支持试用期）"""
+    """授权验证装饰器（后端唯一判定：批准/试用/拒绝，并可指示前端弹窗）"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         # 获取客户端信息
@@ -153,9 +232,10 @@ def require_auth(f):
                 'error': '功能升级中，请联系QQ: 123456789'
             }), 401
         
-        # 验证授权
+        # 验证授权（后端唯一判定）
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
+        c.row_factory = None
         
         # 放开IP校验，优先按client_id / hardware_id识别（你要求先用机器码识别）
         auth = None
@@ -171,47 +251,46 @@ def require_auth(f):
             auth = c.fetchone()
         
         if not auth:
-            log_request(client_id, ip_address, 'AUTH_FAILED', False, '客户端不存在')
+            # 首次出现client_id也给予试用（按 hardware 限日）
+            authorized, left, reason = _grant_or_validate_trial(c, client_id or 'UNKNOWN', hardware_id or 'UNKNOWN', ip_address)
+            conn.commit()
             conn.close()
-            return jsonify({
-                'success': False,
-                'error_code': 102,
-                'error': '功能升级中，请联系QQ: 123456789'
-            }), 403
+            if authorized:
+                # 允许通过（试用）
+                response = f(auth, *args, **kwargs)
+                return response
+            # 拒绝并指示前端弹窗
+            return jsonify({'success': False, 'show_popup': True, 'reason': reason or 'not_found'}), 403
         
         # 检查状态
         is_active = auth[5]
         
         # 已拒绝
         if is_active == -1:
-            log_request(client_id, ip_address, 'REJECTED', False, '客户端已被拒绝')
             conn.close()
-            return jsonify({
-                'success': False,
-                'error_code': 103,
-                'error': '功能升级中，请联系QQ: 123456789'
-            }), 403
+            return jsonify({'success': False, 'show_popup': True, 'reason': 'rejected'}), 403
         
         # 待审核（is_active=0）和已批准（is_active=1）都允许通过
         # 试用期由客户端自己控制
         
-        # 已批准客户端不再强制IP校验（你的要求：放开IP先用机器码）；仍保留过期时间校验
-            
-            # 检查过期时间
-            expires_at = auth[7]
-            if expires_at:
-                try:
-                    expire_time = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
-                    if datetime.now() > expire_time:
-                        log_request(client_id, ip_address, 'EXPIRED', False, '授权已过期')
-                        conn.close()
-                        return jsonify({
-                            'success': False,
-                            'error_code': 105,
-                            'error': '功能升级中，请联系QQ: 123456789'
-                        }), 403
-                except:
-                    pass
+        # 已批准：直接放行；未批准：进入试用逻辑
+        if is_active != 1:
+            authorized, left, reason = _grant_or_validate_trial(c, client_id, hardware_id, ip_address)
+            conn.commit()
+            if not authorized:
+                conn.close()
+                return jsonify({'success': False, 'show_popup': True, 'reason': reason or 'trial_expired'}), 403
+
+        # 过期时间（如配置）
+        expires_at = auth[7]
+        if expires_at:
+            try:
+                expire_time = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
+                if datetime.now() > expire_time:
+                    conn.close()
+                    return jsonify({'success': False, 'show_popup': True, 'reason': 'auth_expired'}), 403
+            except Exception:
+                pass
         
         # 若绑定规则，读取规则（预留：可用于限流/策略）
         c.execute('SELECT rule_id FROM client_settings WHERE client_id=?', (client_id,))
@@ -233,8 +312,12 @@ def require_auth(f):
         conn.commit()
         conn.close()
         
-        # 传递 auth 参数给被装饰的函数
-        return f(auth, *args, **kwargs)
+        # 传递 auth 参数给被装饰的函数（兼容老签名）
+        sig = inspect.signature(f)
+        if 'auth' in sig.parameters:
+            return f(auth, *args, **kwargs)
+        else:
+            return f(*args, **kwargs)
     
     return decorated_function
 
@@ -258,6 +341,26 @@ def log_request(client_id, ip_address, request_type, success, error_msg=None):
     ''', (client_id, ip_address, request_type, 1 if success else 0, error_msg))
     conn.commit()
     conn.close()
+
+
+@app.route('/api/event', methods=['POST'])
+def track_event():
+    """前端埋点：记录关键操作事件。"""
+    client_id = request.headers.get('X-Client-ID')
+    hardware_id = request.headers.get('X-Hardware-ID')
+    ip_address = request.remote_addr
+    data = request.json or {}
+    action = data.get('action') or 'unknown'
+    detail_json = json.dumps(data.get('detail') or {}, ensure_ascii=False)
+    success = 1 if data.get('success', True) else 0
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute('''INSERT INTO event_logs (client_id, hardware_id, ip_address, action, detail_json, success)
+                 VALUES (?,?,?,?,?,?)''', (client_id, hardware_id, ip_address, action, detail_json, success))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
 
 # ==================== API 接口 ====================
 
@@ -724,16 +827,79 @@ def admin_client_set_status(cid, status):
 @app.route('/admin/logs')
 @admin_required
 def admin_logs():
-    client_id = request.args.get('client_id')
+    client_id = request.args.get('client_id', '').strip()
+    ip = request.args.get('ip', '').strip()
+    action = request.args.get('action', '').strip()
+    success = request.args.get('success', '')
+    delete_before = request.args.get('delete_before')
+
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
+
+    # 可选：删除7天前日志
+    if delete_before:
+        c.execute("DELETE FROM request_logs WHERE created_at < datetime('now','-7 days')")
+        conn.commit()
+
+    # 构建查询
+    sql = 'SELECT * FROM request_logs WHERE 1=1'
+    params = []
     if client_id:
-        c.execute('SELECT * FROM request_logs WHERE client_id = ? ORDER BY created_at DESC LIMIT 200', (client_id,))
-    else:
-        c.execute('SELECT * FROM request_logs ORDER BY created_at DESC LIMIT 200')
+        sql += ' AND client_id LIKE ?'
+        params.append(f"%{client_id}%")
+    if ip:
+        sql += ' AND ip_address LIKE ?'
+        params.append(f"%{ip}%")
+    if action:
+        sql += ' AND request_type LIKE ?'
+        params.append(f"%{action}%")
+    if success in ('0','1'):
+        sql += ' AND success = ?'
+        params.append(int(success))
+    sql += ' ORDER BY created_at DESC LIMIT 500'
+
+    c.execute(sql, tuple(params))
     logs = c.fetchall()
     conn.close()
-    return render_template('logs.html', logs=logs, client_id=client_id)
+    return render_template('logs.html', logs=logs, client_id=client_id, ip=ip, action=action, success=success)
+
+
+@app.route('/admin/events')
+@admin_required
+def admin_events():
+    client_id = request.args.get('client_id', '').strip()
+    action = request.args.get('action', '').strip()
+    ip = request.args.get('ip', '').strip()
+    success = request.args.get('success', '')
+    delete_before = request.args.get('delete_before')
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+
+    if delete_before:
+        c.execute("DELETE FROM event_logs WHERE created_at < datetime('now','-30 days')")
+        conn.commit()
+
+    sql = 'SELECT id, client_id, hardware_id, ip_address, action, detail_json, success, created_at FROM event_logs WHERE 1=1'
+    params = []
+    if client_id:
+        sql += ' AND client_id LIKE ?'
+        params.append(f"%{client_id}%")
+    if action:
+        sql += ' AND action LIKE ?'
+        params.append(f"%{action}%")
+    if ip:
+        sql += ' AND ip_address LIKE ?'
+        params.append(f"%{ip}%")
+    if success in ('0','1'):
+        sql += ' AND success = ?'
+        params.append(int(success))
+    sql += ' ORDER BY created_at DESC LIMIT 500'
+
+    c.execute(sql, tuple(params))
+    rows = c.fetchall()
+    conn.close()
+    return render_template('events.html', rows=rows, client_id=client_id, action=action, ip=ip, success=success)
 
 @app.route('/admin/rules', methods=['GET', 'POST'])
 @admin_required
@@ -919,22 +1085,31 @@ def check_auth():
     if not client_id:
         return jsonify({'success': False, 'error': '缺少客户端ID'}), 400
     
-    conn = get_db()
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    
-    c.execute('SELECT is_active FROM authorizations WHERE client_id = ?', (client_id,))
-    auth = c.fetchone()
-    
-    if auth:
-        return jsonify({
-            'success': True,
-            'is_active': auth['is_active']
-        })
-    else:
-        return jsonify({
-            'success': False,
-            'error': '未找到授权记录'
-        }), 404
+    c.execute('SELECT is_active FROM authorizations WHERE client_id = ? LIMIT 1', (client_id,))
+    row = c.fetchone()
+
+    if not row:
+        # 未注册也尝试按试用规则判断（不发试用，仅返回未授权）
+        conn.close()
+        return jsonify({'success': True, 'authorized': False, 'is_active': 0, 'trial_remaining_seconds': 0})
+
+    is_active = row[0]
+    trial_left = 0
+    if is_active != 1:
+        # 查是否有有效试用（取最近一条）
+        c.execute('''SELECT trial_expires_at FROM client_access WHERE client_id=? ORDER BY trial_expires_at DESC LIMIT 1''', (client_id,))
+        r = c.fetchone()
+        if r and r[0]:
+            try:
+                exp = datetime.strptime(r[0], '%Y-%m-%d %H:%M:%S')
+                left = (exp - datetime.now()).total_seconds()
+                trial_left = int(left) if left > 0 else 0
+            except Exception:
+                pass
+    conn.close()
+    return jsonify({'success': True, 'authorized': bool(is_active == 1 or trial_left > 0), 'is_active': is_active, 'trial_remaining_seconds': trial_left})
 
 
 # ==================== 抖店爬虫API（支持验证码交互） ====================
@@ -946,7 +1121,7 @@ from douyin_scraper_v2 import DouyinScraperV2
 
 @app.route('/api/douyin-login-start', methods=['POST'])
 @require_auth
-def douyin_login_start(auth):
+def douyin_login_start(auth=None):
     """
     步骤1：开始登录
     客户端发送：邮箱、密码
@@ -993,7 +1168,7 @@ def douyin_login_start(auth):
 
 @app.route('/api/douyin-submit-code', methods=['POST'])
 @require_auth
-def douyin_submit_code(auth):
+def douyin_submit_code(auth=None):
     """
     步骤2：提交验证码
     客户端发送：验证码
@@ -1038,7 +1213,7 @@ def douyin_submit_code(auth):
 
 @app.route('/api/douyin-get-options', methods=['POST'])
 @require_auth
-def douyin_get_options(auth):
+def douyin_get_options(auth=None):
     """
     步骤3：获取所有可选的榜单选项（用于前端显示）
     注意：必须先登录成功
@@ -1073,7 +1248,7 @@ def douyin_get_options(auth):
 
 @app.route('/api/douyin-scrape', methods=['POST'])
 @require_auth
-def douyin_scrape(auth):
+def douyin_scrape(auth=None):
     """
     步骤4：根据客户选择的参数爬取商品
     客户端发送：rank_type, time_range, category, brand_type, limit, first_time_only, top_n
@@ -1128,7 +1303,7 @@ def douyin_scrape(auth):
 
 @app.route('/api/douyin-screenshot', methods=['POST'])
 @require_auth
-def douyin_screenshot(auth):
+def douyin_screenshot(auth=None):
     """
     获取当前页面截图（用于前端实时显示）
     前端可以每2-3秒轮询一次
@@ -1161,7 +1336,7 @@ def douyin_screenshot(auth):
 
 @app.route('/api/douyin-cleanup', methods=['POST'])
 @require_auth
-def douyin_cleanup(auth):
+def douyin_cleanup(auth=None):
     """清理爬虫实例（客户端关闭时调用）"""
     client_id = request.headers.get('X-Client-ID')
     

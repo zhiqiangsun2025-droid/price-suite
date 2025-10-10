@@ -86,14 +86,22 @@ class DouyinScraperV2:
                 time.sleep(1.2)
             except Exception as e:
                 logger.warning(f"未直接找到'邮箱登录'标签，尝试通过切换选项卡: {e}")
+                # 方案2：在登录卡片上查找“邮箱登录”小链接
                 try:
-                    # 方案2：在登录卡片上查找“邮箱登录”小链接
                     link = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//a[contains(text(),'邮箱登录')]")))
                     self.driver.execute_script("arguments[0].click();", link)
                     switched = True
                     time.sleep(1.2)
                 except Exception:
-                    pass
+                    try:
+                        # 方案3：点击tab容器里的第二个tab
+                        tabs = self.driver.find_elements(By.CSS_SELECTOR, ".semi-tabs-tab")
+                        if len(tabs) >= 2:
+                            self.driver.execute_script("arguments[0].click();", tabs[1])
+                            switched = True
+                            time.sleep(1.0)
+                    except Exception:
+                        pass
             
             # 3. 输入账号密码
             logger.info("正在输入邮箱和密码...")
