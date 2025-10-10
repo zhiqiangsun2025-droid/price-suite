@@ -2,10 +2,10 @@
 """
 智能选品铺货系统 - 终极版客户端
 仿微信UI + 智能选品 + 实时画面
-版本：v10.10.3
+版本：v10.10.5
 """
 
-VERSION = "v10.10.3"
+VERSION = "v10.10.5"
 
 import customtkinter as ctk
 import requests

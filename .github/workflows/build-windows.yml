@@ -33,7 +33,7 @@ jobs:
     - name: Build Full EXE
       run: |
         cd client
-        pyinstaller --onefile --noconsole --name=智能选品系统 modern_client.py
+        pyinstaller --onefile --noconsole --name=智能选品系统 modern_client_ultimate.py
       shell: cmd
       continue-on-error: true
     
