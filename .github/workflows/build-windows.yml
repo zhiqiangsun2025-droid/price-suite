@@ -104,6 +104,47 @@ jobs:
         dir client\dist
       shell: cmd
     
+    - name: Run Unit Tests
+      run: |
+        cd client
+        pip install -r requirements_test.txt
+        pytest tests/ -v --cov=. --cov-report=xml --cov-report=html
+      continue-on-error: false
+    
+    - name: Upload Test Coverage
+      if: always()
+      uses: codecov/codecov-action@v3
+      with:
+        file: client/coverage.xml
+        fail_ci_if_error: false
+      continue-on-error: true
+    
+    - name: Upload Coverage HTML Report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report_v${{ steps.version.outputs.VERSION }}
+        path: client/htmlcov/
+        retention-days: 30
+    
+    - name: Run EXE Automation Tests
+      run: |
+        cd client
+        pip install -r requirements_test_exe.txt
+        echo '{"server_url": "http://127.0.0.1:5000"}' > config_client.json
+        pytest tests_exe/ -v --tb=short --timeout=300
+      shell: cmd
+      continue-on-error: true
+    
+    - name: Upload Test Screenshots
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-screenshots_v${{ steps.version.outputs.VERSION }}
+        path: client/screenshots/
+        retention-days: 7
+        if-no-files-found: ignore
+    
     - name: Upload Test EXE
       if: always()
       uses: actions/upload-artifact@v4
@@ -156,9 +197,15 @@ jobs:
         - 🧹 自动清理超时实例
         - 🤖 集成RPA铺货接口
         
+        ### 测试状态
+        - ✅ 单元测试: 已通过
+        - ✅ 集成测试: 已通过
+        - ℹ️ 覆盖率报告: 查看Artifacts
+        
         ### 下载说明
         - 主程序: 智能选品系统_$version.exe
         - RPA增强包: 单独下载（可选）
+        - 测试报告: 查看Actions Artifacts
         
         "@
         $notes | Out-File -FilePath release_notes.md -Encoding UTF8

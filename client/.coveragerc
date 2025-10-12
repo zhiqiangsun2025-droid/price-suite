@@ -1,0 +1,29 @@
+[run]
+source = .
+omit = 
+    */tests/*
+    */tests_exe/*
+    */__pycache__/*
+    */venv/*
+    */build/*
+    */dist/*
+    *_backup.py
+    *_old.py
+    simple_client.py
+    test_*.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.:
+    raise AssertionError
+    raise NotImplementedError
+    if 0:
+    if False:
+    if TYPE_CHECKING:
+precision = 2
+
+[html]
+directory = htmlcov
+

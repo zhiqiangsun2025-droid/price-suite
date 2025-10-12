@@ -287,16 +287,16 @@ def require_auth(f):
             authorized, left, reason = _grant_or_validate_trial(c, client_id, hardware_id, ip_address)
             conn.commit()
             if not authorized:
-            conn.close()
+                conn.close()
                 return jsonify({'success': False, 'show_popup': True, 'reason': reason or 'trial_expired'}), 403
         
         # 过期时间（如配置）
         expires_at = auth[7]
         if expires_at:
             try:
-            expire_time = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
-            if datetime.now() > expire_time:
-                conn.close()
+                expire_time = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
+                if datetime.now() > expire_time:
+                    conn.close()
                     return jsonify({'success': False, 'show_popup': True, 'reason': 'auth_expired'}), 403
             except Exception:
                 pass
@@ -326,7 +326,7 @@ def require_auth(f):
         if 'auth' in sig.parameters:
             return f(auth, *args, **kwargs)
         else:
-        return f(*args, **kwargs)
+            return f(*args, **kwargs)
     
     return decorated_function
 
