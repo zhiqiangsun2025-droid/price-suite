@@ -50,7 +50,7 @@ def _resolve_server_url() -> str:
                     return url.strip()
     except Exception:
         pass
-    return "http://127.0.0.1:5000"
+    return "http://172.19.251.155:5000"
 
 SERVER_URL = _resolve_server_url()
 TRIAL_DURATION = 3600  # 1小时试用
