@@ -18,10 +18,27 @@ jobs:
       with:
         python-version: '3.11'
     
+    - name: Generate Version Number
+      id: version
+      run: |
+        # 生成版本号：MMDDXXX (月日+序号)
+        $date = Get-Date -Format "MMdd"
+        $today = Get-Date -Format "yyyy-MM-dd"
+        
+        # 使用workflow运行次数作为今日序号（简化方案）
+        # 格式化为3位数
+        $todayCount = $env:GITHUB_RUN_NUMBER % 1000
+        $version = "$date$('{0:D3}' -f $todayCount)"
+        
+        echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+        echo "Generated version: $version"
+        Write-Host "::notice::版本号: v$version"
+      shell: pwsh
+    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install customtkinter requests pillow pandas openpyxl pyinstaller
+        pip install customtkinter requests pillow pandas openpyxl pyinstaller cryptography pyperclip
         pip list | findstr "customtkinter requests pillow pandas"
     
     - name: Build Simple Test EXE
@@ -31,26 +48,38 @@ jobs:
       shell: cmd
       continue-on-error: true
     
+    - name: Update Version in Code
+      run: |
+        cd client
+        # 更新VERSION常量
+        $content = Get-Content modern_client_ultimate.py -Encoding UTF8
+        $content = $content -replace 'VERSION = ".*"', 'VERSION = "v${{ steps.version.outputs.VERSION }}"'
+        $content | Set-Content modern_client_ultimate.py -Encoding UTF8
+        Write-Host "✅ 版本号已更新为: v${{ steps.version.outputs.VERSION }}"
+      shell: pwsh
+    
     - name: Build Full EXE
       run: |
         cd client
         echo "=== Testing Python syntax ==="
         python -m py_compile modern_client_ultimate.py
         echo "=== Starting pyinstaller for modern_client_ultimate.py ==="
-        pyinstaller --onefile --windowed --name=智能选品系统 ^
+        pyinstaller --onefile --windowed --name=智能选品系统_v${{ steps.version.outputs.VERSION }} ^
           --hidden-import=customtkinter ^
+          --hidden-import=cryptography ^
           --hidden-import=PIL._tkinter_finder ^
           --collect-all=customtkinter ^
+          --add-data="README.md;." ^
           modern_client_ultimate.py 2>&1
         echo "=== Pyinstaller exit code: %ERRORLEVEL% ==="
-        if exist dist\智能选品系统.exe (
+        if exist dist\智能选品系统_v${{ steps.version.outputs.VERSION }}.exe (
           echo "=== SUCCESS: EXE built successfully ==="
           dir dist
         ) else (
           echo "=== ERROR: EXE not found ==="
-          if exist build\智能选品系统 (
+          if exist build (
             echo "=== Build warnings: ==="
-            type build\智能选品系统\warn*.txt 2>nul
+            type build\智能选品系统_v${{ steps.version.outputs.VERSION }}\warn*.txt 2>nul
           )
           echo "=== Dist folder contents: ==="
           dir dist 2>nul
@@ -67,7 +96,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: 测试版
+        name: 智能选品系统测试版_v${{ steps.version.outputs.VERSION }}
         path: client/dist/智能选品系统测试版.exe
         retention-days: 90
         if-no-files-found: warn
@@ -76,16 +105,51 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: 完整版
-        path: client/dist/智能选品系统.exe
+        name: 智能选品系统_v${{ steps.version.outputs.VERSION }}
+        path: client/dist/智能选品系统_v${{ steps.version.outputs.VERSION }}.exe
         retention-days: 90
         if-no-files-found: warn
+    
+    - name: Create Release Notes
+      if: success()
+      run: |
+        $version = "v${{ steps.version.outputs.VERSION }}"
+        $date = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        $notes = @"
+        ## 智能选品系统 $version
+        
+        **发布时间**: $date
+        **版本号**: $version
+        
+        ### 主要功能
+        - ✅ 抖店商品爬取（支持验证码）
+        - ✅ AI智能匹配
+        - ✅ 价格对比分析
+        - ✅ Excel导出
+        - ✅ RPA自动铺货（可选）
+        
+        ### 优化内容
+        - 🚀 优化爬虫稳定性（多重定位策略）
+        - 🛡️ 增强错误处理和用户提示
+        - 💾 自动数据库备份
+        - 🧹 自动清理超时实例
+        - 🤖 集成RPA铺货接口
+        
+        ### 下载说明
+        - 主程序: 智能选品系统_$version.exe
+        - RPA增强包: 单独下载（可选）
+        
+        "@
+        $notes | Out-File -FilePath release_notes.md -Encoding UTF8
+        Write-Host "Release notes created"
+      shell: pwsh
     
     - name: Upload to Release (if tagged)
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: client/dist/智能选品系统.exe
+        files: client/dist/智能选品系统_v${{ steps.version.outputs.VERSION }}.exe
+        body_path: release_notes.md
 
 
 

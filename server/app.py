@@ -22,16 +22,25 @@ import os
 import ipaddress
 import logging
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler('app.log'),
-        logging.StreamHandler()
-    ]
+# 配置日志 - 使用轮转
+import logging.handlers
+log_formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+
+file_handler = logging.handlers.RotatingFileHandler(
+    'app.log',
+    maxBytes=10*1024*1024,  # 10MB
+    backupCount=7,
+    encoding='utf-8'
 )
+file_handler.setFormatter(log_formatter)
+
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(log_formatter)
+
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
 app = Flask(__name__)
 CORS(app)
@@ -1117,7 +1126,61 @@ def check_auth():
 # 全局爬虫实例池（key: client_id, value: scraper_instance）
 scraper_pool = {}
 
-from douyin_scraper_v2 import DouyinScraperV2
+from douyin_scraper_v2 import DouyinScraperV2, LoginRequiredException, ElementNotFoundException, NetworkException
+
+# 定时任务：清理超时的爬虫实例
+import atexit
+from apscheduler.schedulers.background import BackgroundScheduler
+
+def cleanup_stale_scrapers():
+    """清理超时的爬虫实例（30分钟无活动）"""
+    now = time.time()
+    stale_clients = []
+    
+    for client_id, scraper in scraper_pool.items():
+        if hasattr(scraper, 'last_activity'):
+            if now - scraper.last_activity > 1800:  # 30分钟
+                stale_clients.append(client_id)
+    
+    for client_id in stale_clients:
+        try:
+            scraper_pool[client_id].close()
+            del scraper_pool[client_id]
+            logger.info(f"🧹 清理超时爬虫实例：{client_id}")
+        except Exception as e:
+            logger.error(f"❌ 清理爬虫实例失败 {client_id}: {e}")
+
+def backup_database():
+    """备份数据库"""
+    try:
+        import shutil
+        backup_dir = "backups"
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d")
+        backup_file = f"{backup_dir}/authorization_{timestamp}.db"
+        
+        # 只备份今天的（避免重复备份）
+        if not os.path.exists(backup_file):
+            shutil.copy2(DB_PATH, backup_file)
+            logger.info(f"💾 数据库备份成功: {backup_file}")
+            
+            # 删除7天前的备份
+            for f in os.listdir(backup_dir):
+                if f.startswith("authorization_") and f.endswith(".db"):
+                    file_path = os.path.join(backup_dir, f)
+                    if os.path.getmtime(file_path) < time.time() - 7*86400:
+                        os.remove(file_path)
+                        logger.info(f"🗑️ 删除旧备份: {f}")
+    except Exception as e:
+        logger.error(f"❌ 数据库备份失败: {e}")
+
+# 启动定时任务
+scheduler = BackgroundScheduler()
+scheduler.add_job(cleanup_stale_scrapers, 'interval', minutes=10)  # 每10分钟清理一次
+scheduler.add_job(backup_database, 'cron', hour=3, minute=0)  # 每天凌晨3点备份
+scheduler.start()
+atexit.register(lambda: scheduler.shutdown())
 
 @app.route('/api/douyin-login-start', methods=['POST'])
 @require_auth
@@ -1250,9 +1313,7 @@ def douyin_get_options(auth=None):
 @require_auth
 def douyin_scrape(auth=None):
     """
-    步骤4：根据客户选择的参数爬取商品
-    客户端发送：rank_type, time_range, category, brand_type, limit, first_time_only, top_n
-    服务器返回：商品列表
+    步骤4：根据客户选择的参数爬取商品 - 优化版
     """
     client_id = request.headers.get('X-Client-ID')
     data = request.json
@@ -1262,14 +1323,22 @@ def douyin_scrape(auth=None):
     category = data.get('category')
     brand_type = data.get('brand_type')
     limit = int(data.get('limit', 50))
-    first_time_only = data.get('first_time_only', False)  # 是否只要首次上榜
-    top_n = int(data.get('top_n', 0))  # 前N名（0表示全部）
+    first_time_only = data.get('first_time_only', False)
+    top_n = int(data.get('top_n', 0))
     
     scraper = scraper_pool.get(client_id)
-    if not scraper or scraper.login_status != 'logged_in':
+    if not scraper:
         return jsonify({
             'success': False,
-            'error': '请先登录'
+            'error_type': 'auth',
+            'error': '会话已过期，请重新登录'
+        }), 400
+    
+    if scraper.login_status != 'logged_in':
+        return jsonify({
+            'success': False,
+            'error_type': 'auth',
+            'error': '请先完成登录'
         }), 400
     
     try:
@@ -1294,10 +1363,36 @@ def douyin_scrape(auth=None):
             'count': len(products)
         })
     
-    except Exception as e:
+    except LoginRequiredException as e:
+        logger.warning(f"❌ 需要登录: {client_id}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error_type': 'auth',
+            'error': '登录已过期，请重新登录'
+        }), 401
+    
+    except ElementNotFoundException as e:
+        logger.error(f"❌ 元素定位失败: {client_id}, {e}")
+        return jsonify({
+            'success': False,
+            'error_type': 'scraper',
+            'error': '页面结构已变化，请联系客服更新程序'
+        }), 500
+    
+    except NetworkException as e:
+        logger.error(f"❌ 网络错误: {client_id}, {e}")
+        return jsonify({
+            'success': False,
+            'error_type': 'network',
+            'error': '网络连接失败，请检查网络后重试'
+        }), 500
+    
+    except Exception as e:
+        logger.error(f"❌ 爬取异常: {client_id}, {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error_type': 'unknown',
+            'error': f'系统错误：{str(e)}'
         }), 500
 
 

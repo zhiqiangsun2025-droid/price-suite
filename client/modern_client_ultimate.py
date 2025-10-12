@@ -23,6 +23,7 @@ import pandas as pd
 from PIL import Image
 from io import BytesIO
 import base64
+import webbrowser
 
 # 浅色主题（仿微信）
 ctk.set_appearance_mode("light")
@@ -970,12 +971,115 @@ class UltimateApp(ctk.CTk):
             text=f"✅ 成功获取 {len(products)} 个商品\n\n已导出到：{excel_file}\n\n可用于RPA自动铺货"
         )
         
-        # 成功动画
-        self.show_success_animation(
-            f"选品成功！",
-            f"获取 {len(products)} 个商品\n已导出Excel文件",
-            None
-        )
+        # 保存当前Excel文件路径（用于RPA）
+        self.last_excel_file = excel_file
+        
+        # 显示成功对话框，带RPA铺货选项
+        self.show_success_with_rpa_option(products, excel_file)
+    
+    def show_success_with_rpa_option(self, products, excel_file):
+        """显示成功对话框，带RPA铺货选项"""
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("选品成功")
+        dialog.geometry("500x400")
+        dialog.configure(fg_color=Theme.CARD_BG)
+        dialog.transient(self)
+        dialog.grab_set()
+        
+        # 居中
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - 250
+        y = (dialog.winfo_screenheight() // 2) - 200
+        dialog.geometry(f'500x400+{x}+{y}')
+        
+        # 成功图标
+        ctk.CTkLabel(dialog, text="✅", font=ctk.CTkFont(size=80)).pack(pady=(30,20))
+        
+        # 标题
+        ctk.CTkLabel(
+            dialog,
+            text="选品成功！",
+            font=ctk.CTkFont(size=24, weight="bold"),
+            text_color=Theme.GREEN
+        ).pack(pady=10)
+        
+        # 信息
+        ctk.CTkLabel(
+            dialog,
+            text=f"成功获取 {len(products)} 个商品\n已导出Excel文件",
+            font=ctk.CTkFont(size=14),
+            text_color=Theme.TEXT_SECONDARY
+        ).pack(pady=10)
+        
+        # 按钮区域
+        btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_frame.pack(pady=30)
+        
+        # 一键铺货按钮
+        ctk.CTkButton(
+            btn_frame,
+            text="🤖 一键铺货",
+            width=180,
+            height=50,
+            fg_color=Theme.ORANGE,
+            hover_color=self.darken_color(Theme.ORANGE),
+            font=ctk.CTkFont(size=16, weight="bold"),
+            command=lambda: [dialog.destroy(), self.handle_rpa_listing(excel_file)]
+        ).pack(side="left", padx=10)
+        
+        # 关闭按钮
+        ctk.CTkButton(
+            btn_frame,
+            text="关闭",
+            width=140,
+            height=50,
+            fg_color=Theme.TEXT_SECONDARY,
+            font=ctk.CTkFont(size=14),
+            command=dialog.destroy
+        ).pack(side="left", padx=10)
+        
+        # 3秒后自动关闭
+        self.after(3000, dialog.destroy)
+    
+    def handle_rpa_listing(self, excel_file):
+        """处理RPA铺货"""
+        # 检查RPA模块是否存在
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        rpa_script = os.path.join(script_dir, '..', 'rpa', 'rpa_controller.py')
+        
+        if os.path.exists(rpa_script):
+            # RPA模块存在，启动
+            try:
+                # 使用subprocess启动RPA脚本
+                if platform.system() == 'Windows':
+                    subprocess.Popen([
+                        'python', rpa_script,
+                        '--excel', excel_file,
+                        '--column', '商品链接'
+                    ], creationflags=subprocess.CREATE_NEW_CONSOLE)
+                else:
+                    subprocess.Popen([
+                        'python3', rpa_script,
+                        '--excel', excel_file,
+                        '--column', '商品链接'
+                    ])
+                
+                messagebox.showinfo(
+                    "RPA已启动",
+                    "RPA铺货程序已在后台启动！\n\n请不要操作鼠标和键盘，让程序自动完成。"
+                )
+            except Exception as e:
+                messagebox.showerror("启动失败", f"启动RPA失败：{e}")
+        else:
+            # RPA模块不存在，提示下载
+            result = messagebox.askyesno(
+                "需要RPA增强包",
+                "一键铺货功能需要安装RPA增强包\n\n"
+                "RPA增强包是独立的自动化工具，可选安装。\n\n"
+                "是否前往下载页面？"
+            )
+            if result:
+                webbrowser.open("https://github.com/zhiqiangsun2025-droid/price-suite/releases")
     
     def _selection_failed(self, error):
         """选品失败"""
