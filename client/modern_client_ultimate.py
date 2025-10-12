@@ -29,8 +29,30 @@ import webbrowser
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("green")
 
-# ==================== 配置（硬编码） ====================
-SERVER_URL = "http://172.19.251.155:5000"  # 硬编码，不暴露给客户
+# ==================== 配置（可覆盖） ====================
+def _resolve_server_url() -> str:
+    """从环境变量/配置文件解析后端地址，默认回落到本机。
+    优先级：环境变量 PRICE_SUITE_SERVER_URL > 同目录 config_client.json.server_url > 默认 http://127.0.0.1:5000
+    """
+    try:
+        import os, json
+        env_url = os.environ.get("PRICE_SUITE_SERVER_URL")
+        if env_url and env_url.strip():
+            return env_url.strip()
+        # 配置文件位于当前脚本同级目录
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        cfg_path = os.path.join(script_dir, "config_client.json")
+        if os.path.exists(cfg_path):
+            with open(cfg_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                url = (data or {}).get("server_url")
+                if url and isinstance(url, str) and url.strip():
+                    return url.strip()
+    except Exception:
+        pass
+    return "http://127.0.0.1:5000"
+
+SERVER_URL = _resolve_server_url()
 TRIAL_DURATION = 3600  # 1小时试用
 CONTACT_QQ = "123456789"
 
@@ -305,20 +327,26 @@ class UltimateApp(ctk.CTk):
     
     def switch_page(self, page_id):
         """切换页面"""
-        self.current_page = page_id
-        
-        # 清空内容区
-        for widget in self.content_frame.winfo_children():
-            widget.destroy()
-        
-        # 重新创建菜单（更新active状态）
-        for widget in self.winfo_children():
-            if isinstance(widget, ctk.CTkFrame):
-                for child in widget.winfo_children():
-                    if isinstance(child, ctk.CTkFrame) and child.cget("width") == 200:
-                        child.destroy()
-                        self.create_left_menu(widget)
-                        break
+        # 去抖：防止重复点击导致状态错乱
+        if getattr(self, "_switching", False):
+            return
+        self._switching = True
+        try:
+            self.current_page = page_id
+            # 清空内容区
+            for widget in self.content_frame.winfo_children():
+                widget.destroy()
+
+            # 更新左侧菜单高亮（重建菜单）
+            for widget in self.winfo_children():
+                if isinstance(widget, ctk.CTkFrame):
+                    for child in widget.winfo_children():
+                        if isinstance(child, ctk.CTkFrame) and child.cget("width") == 200:
+                            child.destroy()
+                            self.create_left_menu(widget)
+                            break
+        finally:
+            self._switching = False
         
         # 显示对应页面
         if page_id == "douyin_login":
@@ -1280,14 +1308,12 @@ class UltimateApp(ctk.CTk):
         ).pack(side="left", padx=5)
     
     def show_error(self, error_code, error_msg):
-        """显示错误（友好版，不占满屏幕）"""
-        # 只显示一个小提示，不影响主界面
-        messagebox.showinfo(
-            "提示",
-            "软件正在初始化，请稍候...\n如有疑问请联系客服"
-        )
-        # 不退出软件，继续显示主界面
-        self.init_main_ui()
+        """显示错误（友好版，不打断流程）。"""
+        try:
+            messagebox.showwarning("提示", f"{error_msg or '发生错误'}\n如有疑问请联系客服")
+        except Exception:
+            pass
+        # 保持当前页面，不强制跳回
 
 if __name__ == "__main__":
     app = UltimateApp()
