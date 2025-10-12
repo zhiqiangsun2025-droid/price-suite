@@ -21,17 +21,19 @@ jobs:
     - name: Generate Version Number
       id: version
       run: |
-        # 生成版本号：MMDDXXX (月日+序号)
+        # 生成版本号：MMDDXXX (月日+时分秒的哈希)
         $date = Get-Date -Format "MMdd"
-        $today = Get-Date -Format "yyyy-MM-dd"
+        $time = Get-Date -Format "HHmmss"
         
-        # 使用workflow运行次数作为今日序号（简化方案）
-        # 格式化为3位数
-        $todayCount = $env:GITHUB_RUN_NUMBER % 1000
+        # 使用时间生成今日序号（确保唯一且递增）
+        # 取时间的后3位作为序号
+        $timeHash = [int]($time.Substring($time.Length - 3))
+        $todayCount = $timeHash % 1000
+        if ($todayCount -eq 0) { $todayCount = 1 }
         $version = "$date$('{0:D3}' -f $todayCount)"
         
         echo "VERSION=$version" >> $env:GITHUB_OUTPUT
-        echo "Generated version: $version"
+        echo "Generated version: v$version (date: $date, sequence: $todayCount)"
         Write-Host "::notice::版本号: v$version"
       shell: pwsh
     
@@ -63,26 +65,36 @@ jobs:
         cd client
         echo "=== Testing Python syntax ==="
         python -m py_compile modern_client_ultimate.py
-        echo "=== Starting pyinstaller for modern_client_ultimate.py ==="
-        pyinstaller --onefile --windowed --name=智能选品系统_v${{ steps.version.outputs.VERSION }} ^
+        
+        echo "=== Starting pyinstaller ==="
+        echo "Version: ${{ steps.version.outputs.VERSION }}"
+        
+        # 使用英文文件名避免编码问题
+        pyinstaller --onefile --windowed --name=PriceSuite_v${{ steps.version.outputs.VERSION }} ^
           --hidden-import=customtkinter ^
           --hidden-import=cryptography ^
           --hidden-import=PIL._tkinter_finder ^
           --collect-all=customtkinter ^
-          --add-data="README.md;." ^
-          modern_client_ultimate.py 2>&1
-        echo "=== Pyinstaller exit code: %ERRORLEVEL% ==="
-        if exist dist\智能选品系统_v${{ steps.version.outputs.VERSION }}.exe (
-          echo "=== SUCCESS: EXE built successfully ==="
+          --noconfirm ^
+          modern_client_ultimate.py
+        
+        echo "=== Checking build result ==="
+        if exist dist\PriceSuite_v${{ steps.version.outputs.VERSION }}.exe (
+          echo "=== SUCCESS: EXE built ==="
+          dir dist
+          
+          REM 重命名为中文（用于中国用户）
+          copy dist\PriceSuite_v${{ steps.version.outputs.VERSION }}.exe dist\智能选品系统_v${{ steps.version.outputs.VERSION }}.exe
+          echo "=== Created Chinese version ==="
           dir dist
         ) else (
-          echo "=== ERROR: EXE not found ==="
-          if exist build (
-            echo "=== Build warnings: ==="
-            type build\智能选品系统_v${{ steps.version.outputs.VERSION }}\warn*.txt 2>nul
-          )
-          echo "=== Dist folder contents: ==="
+          echo "=== ERROR: Build failed ==="
           dir dist 2>nul
+          if exist build (
+            dir build
+            type build\PriceSuite_v${{ steps.version.outputs.VERSION }}\warn*.txt 2>nul
+          )
+          exit 1
         )
       shell: cmd
       continue-on-error: false
@@ -96,13 +108,22 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: 智能选品系统测试版_v${{ steps.version.outputs.VERSION }}
+        name: TestVersion_v${{ steps.version.outputs.VERSION }}
         path: client/dist/智能选品系统测试版.exe
         retention-days: 90
         if-no-files-found: warn
     
-    - name: Upload Full EXE
-      if: always()
+    - name: Upload English Version
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: PriceSuite_v${{ steps.version.outputs.VERSION }}
+        path: client/dist/PriceSuite_v${{ steps.version.outputs.VERSION }}.exe
+        retention-days: 90
+        if-no-files-found: error
+    
+    - name: Upload Chinese Version
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: 智能选品系统_v${{ steps.version.outputs.VERSION }}
@@ -148,7 +169,9 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: client/dist/智能选品系统_v${{ steps.version.outputs.VERSION }}.exe
+        files: |
+          client/dist/PriceSuite_v${{ steps.version.outputs.VERSION }}.exe
+          client/dist/智能选品系统_v${{ steps.version.outputs.VERSION }}.exe
         body_path: release_notes.md
 
 
