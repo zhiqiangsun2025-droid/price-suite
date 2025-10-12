@@ -206,7 +206,7 @@ class UltimateApp(ctk.CTk):
         # 只显示软件名称和版本（不显示授权状态）
         title = ctk.CTkLabel(
             status_bar,
-            text="🎯 智能选品系统 v2.0",
+            text=f"🎯 智能选品系统 {VERSION}",
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color=Theme.TEXT_PRIMARY
         )
@@ -224,20 +224,18 @@ class UltimateApp(ctk.CTk):
         date_label.pack(side="right", padx=20, pady=12)
     
     def start_trial_countdown(self):
-        """静默检查授权（不显示倒计时）"""
+        """静默检查授权（不再本地弹窗，仅依赖后端指令）。"""
         def update():
             if not hasattr(self, 'trial_start_time') or self.trial_start_time is None:
                 return
-            
+
+            # 若本地判断试用结束，交由后端接口在需要时返回403+show_popup
             elapsed = time.time() - self.trial_start_time
             left = TRIAL_DURATION - elapsed
-            
-            if left <= 0:
-                # 试用期结束，静默提示（不强制退出）
-                self.show_gentle_reminder()
-            else:
-                self.after(60000, update)  # 每分钟检查一次（不是每秒）
-        
+            if left > 0:
+                self.after(60000, update)  # 每分钟检查一次
+            # 结束则不做任何本地弹窗动作，由后续 API 调用按后端返回处理
+
         update()
     
     def create_left_menu(self, parent):
