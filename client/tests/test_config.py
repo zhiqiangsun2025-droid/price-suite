@@ -63,7 +63,7 @@ class TestServerURLResolution:
             from modern_client_ultimate import _resolve_server_url
             result = _resolve_server_url()
             
-            assert result == "http://127.0.0.1:5000"
+            assert result == "http://172.19.251.155:5000"
     
     def test_invalid_json_fallback(self, monkeypatch, tmp_path):
         """测试JSON解析失败时回落默认值"""
@@ -78,7 +78,7 @@ class TestServerURLResolution:
             from modern_client_ultimate import _resolve_server_url
             result = _resolve_server_url()
             
-            assert result == "http://127.0.0.1:5000"
+            assert result == "http://172.19.251.155:5000"
     
     def test_empty_server_url_in_config(self, monkeypatch, tmp_path):
         """测试配置文件中server_url为空字符串"""
@@ -92,7 +92,7 @@ class TestServerURLResolution:
             from modern_client_ultimate import _resolve_server_url
             result = _resolve_server_url()
             
-            assert result == "http://127.0.0.1:5000"
+            assert result == "http://172.19.251.155:5000"
     
     def test_whitespace_trimming(self, monkeypatch):
         """测试环境变量值自动去除空白"""

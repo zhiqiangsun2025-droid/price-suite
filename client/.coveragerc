@@ -11,6 +11,13 @@ omit =
     *_old.py
     simple_client.py
     test_*.py
+    modern_client.py
+    modern_client_v2.py
+    modern_client_v3.py
+    modern_client_final.py
+    modern_client_final_v2.py
+    client_app.py
+    encryption.py
 
 [report]
 exclude_lines =

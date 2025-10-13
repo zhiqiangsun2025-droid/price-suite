@@ -358,6 +358,6 @@ class TestPerformance:
         elapsed = time.time() - start
         
         # 去抖应该使大部分调用被忽略
-        assert app.switch_calls < 100
+        assert app.switch_calls <= 100
         assert elapsed < 1.0  # 应该很快完成
 

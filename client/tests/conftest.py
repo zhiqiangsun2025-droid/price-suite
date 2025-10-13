@@ -12,6 +12,55 @@ from unittest.mock import Mock, MagicMock, patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+@pytest.fixture(scope='session', autouse=True)
+def mock_gui_modules():
+    """全局Mock GUI模块，确保无GUI环境也能运行测试"""
+    gui_mocks = {
+        'tkinter': MagicMock(),
+        'tkinter.ttk': MagicMock(),
+        'tkinter.messagebox': MagicMock(),
+        'tkinter.filedialog': MagicMock(),
+        'customtkinter': MagicMock(),
+    }
+    
+    # 保存原有模块引用
+    original_modules = {name: sys.modules.get(name) for name in gui_mocks}
+    
+    # 注入Mock模块
+    sys.modules.update(gui_mocks)
+    
+    yield
+    
+    # 测试结束后恢复
+    for name, original_mod in original_modules.items():
+        if original_mod is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = original_mod
+
+
+# 全局自动 Mock GUI 依赖，避免在无图形环境导入失败
+@pytest.fixture(autouse=True)
+def mock_gui_env():
+    mocks = {
+        'tkinter': MagicMock(),
+        'tkinter.ttk': MagicMock(),
+        'tkinter.messagebox': MagicMock(),
+        'tkinter.filedialog': MagicMock(),
+        'customtkinter': MagicMock(),
+    }
+    original = {name: sys.modules.get(name) for name in mocks}
+    sys.modules.update(mocks)
+    try:
+        yield
+    finally:
+        for name, mod in original.items():
+            if mod is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = mod
+
+
 @pytest.fixture
 def temp_config_file():
     """创建临时配置文件"""
