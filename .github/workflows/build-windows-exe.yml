@@ -77,9 +77,9 @@ jobs:
         }
     
     - name: ⬆️ 上传构建产物
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: 智能选品系统-Windows-20251021004
+        name: 智能选品系统-Windows-20251021005
         path: client/dist/*.exe
         retention-days: 30
     
@@ -120,9 +120,9 @@ jobs:
           modern_client_ultimate.py
     
     - name: ⬆️ 上传构建产物
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: 智能选品系统-Linux-v10.10.5
+        name: 智能选品系统-Linux-20251021005
         path: client/dist/*
         retention-days: 30
 
