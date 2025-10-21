@@ -1,0 +1,43 @@
+name: 简化打包测试
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Windows打包
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: 安装依赖
+      run: |
+        pip install customtkinter requests pillow pandas openpyxl pyinstaller
+    
+    - name: 打包
+      run: |
+        cd client
+        pyinstaller --onefile --windowed --name="智能选品-20251021006" modern_client_ultimate.py
+    
+    - name: 检查
+      run: |
+        dir client\dist
+        if (Test-Path "client\dist\智能选品-20251021006.exe") {
+          Write-Host "✅ 成功"
+        } else {
+          Write-Host "❌ 失败"
+          exit 1
+        }
+    
+    - uses: actions/upload-artifact@v4
+      with:
+        name: exe-20251021006
+        path: client/dist/*.exe
+
