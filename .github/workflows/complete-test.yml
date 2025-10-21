@@ -252,7 +252,7 @@ else:
         cd client
         # 不使用icon避免错误
         pyinstaller `
-          --name="智能选品系统-20251021001" `
+          --name="智能选品系统-20251021005" `
           --onefile `
           --windowed `
           --add-data="config_client.json;." `
@@ -262,7 +262,7 @@ else:
     
     - name: 验证EXE文件
       run: |
-        $exePath = "client\dist\智能选品系统-20251021001.exe"
+        $exePath = "client\dist\智能选品系统-20251021005.exe"
         if (Test-Path $exePath) {
           $fileSize = (Get-Item $exePath).Length / 1MB
           Write-Host "✅ EXE文件存在"
@@ -280,9 +280,9 @@ else:
         }
     
     - name: 上传EXE
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: 智能选品系统-Windows-20251021001
+        name: 智能选品系统-Windows-20251021005
         path: client/dist/*.exe
         retention-days: 30
 
