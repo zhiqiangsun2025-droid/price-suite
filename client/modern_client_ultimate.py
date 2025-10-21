@@ -24,6 +24,32 @@ from PIL import Image
 from io import BytesIO
 import base64
 import webbrowser
+import logging
+import traceback
+from typing import Optional, Dict, List, Any
+
+# ==================== 日志配置 ====================
+# 配置日志系统
+def setup_logging():
+    """设置日志系统"""
+    log_dir = os.path.join(os.path.expanduser('~'), '.config', '智能选品系统')
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir, exist_ok=True)
+    
+    log_file = os.path.join(log_dir, 'client.log')
+    
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        handlers=[
+            logging.FileHandler(log_file, encoding='utf-8'),
+            logging.StreamHandler()
+        ]
+    )
+    
+    return logging.getLogger(__name__)
+
+logger = setup_logging()
 
 # 浅色主题（仿微信）
 ctk.set_appearance_mode("light")
@@ -36,9 +62,12 @@ def _resolve_server_url() -> str:
     """
     try:
         import os, json
+        import logging
+        
         env_url = os.environ.get("PRICE_SUITE_SERVER_URL")
         if env_url and env_url.strip():
             return env_url.strip()
+        
         # 配置文件位于当前脚本同级目录
         script_dir = os.path.dirname(os.path.abspath(__file__))
         cfg_path = os.path.join(script_dir, "config_client.json")
@@ -48,13 +77,45 @@ def _resolve_server_url() -> str:
                 url = (data or {}).get("server_url")
                 if url and isinstance(url, str) and url.strip():
                     return url.strip()
-    except Exception:
-        pass
-    return "http://172.19.251.155:5000"
+    except Exception as e:
+        # 记录错误但不中断
+        try:
+            logging.warning(f"解析服务器地址失败: {e}")
+        except:
+            pass
+    
+    # 默认使用本地服务器
+    return "http://127.0.0.1:5000"
 
 SERVER_URL = _resolve_server_url()
-TRIAL_DURATION = 3600  # 1小时试用
-CONTACT_QQ = "123456789"
+
+# ==================== 常量配置 ====================
+class Config:
+    """应用配置常量"""
+    # 试用时长
+    TRIAL_DURATION = 3600  # 1小时试用（秒）
+    TRIAL_CHECK_INTERVAL = 60000  # 试用检查间隔（毫秒）
+    
+    # 联系方式
+    CONTACT_QQ = "123456789"
+    
+    # 窗口配置
+    WINDOW_WIDTH = 1400
+    WINDOW_HEIGHT = 900
+    
+    # 截图轮询
+    SCREENSHOT_POLL_INTERVAL = 5000  # 截图轮询间隔（毫秒）
+    SCREENSHOT_REQUEST_TIMEOUT = 5  # 截图请求超时（秒）
+    SCREENSHOT_MAX_WIDTH = 800  # 截图最大宽度
+    SCREENSHOT_MAX_HEIGHT = 600  # 截图最大高度
+    
+    # 请求超时
+    LOGIN_TIMEOUT = 60  # 登录请求超时（秒）
+    SCRAPE_TIMEOUT = 120  # 爬取请求超时（秒）
+    REGISTER_TIMEOUT = 10  # 注册请求超时（秒）
+    
+    # 验证码输入超时
+    CODE_INPUT_TIMEOUT = 60  # 验证码输入超时（秒）
 
 # 仿微信配色
 class Theme:
@@ -97,34 +158,62 @@ def get_config_path():
 
 CONFIG_FILE = get_config_path()
 
-def load_config():
+def load_config() -> Dict[str, Any]:
+    """加载配置文件"""
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except:
+                config = json.load(f)
+                logger.info("配置文件加载成功")
+                return config
+        except json.JSONDecodeError as e:
+            logger.error(f"配置文件JSON格式错误: {e}")
+            return {}
+        except Exception as e:
+            logger.error(f"加载配置文件失败: {e}")
             return {}
     return {}
 
-def save_config(config):
-    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-        json.dump(config, f, ensure_ascii=False, indent=2)
-
-def get_hardware_id():
+def save_config(config: Dict[str, Any]) -> None:
+    """保存配置文件"""
     try:
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+        logger.info("配置文件保存成功")
+    except Exception as e:
+        logger.error(f"保存配置文件失败: {e}")
+        raise
+
+def get_hardware_id() -> str:
+    """获取硬件指纹ID"""
+    try:
+        # 获取MAC地址
         mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff) 
                        for elements in range(0, 2*6, 2)][::-1])
+        
+        # 获取磁盘序列号（仅Windows）
+        disk_serial = "UNKNOWN"
         if platform.system() == 'Windows':
             try:
-                output = subprocess.check_output("wmic diskdrive get serialnumber", shell=True).decode()
-                disk_serial = output.split('\n')[1].strip()
-            except:
+                output = subprocess.check_output(
+                    "wmic diskdrive get serialnumber", 
+                    shell=True, 
+                    stderr=subprocess.DEVNULL
+                ).decode()
+                lines = output.strip().split('\n')
+                if len(lines) > 1:
+                    disk_serial = lines[1].strip()
+            except Exception as e:
+                logger.warning(f"获取磁盘序列号失败: {e}")
                 disk_serial = "UNKNOWN"
-        else:
-            disk_serial = "UNKNOWN"
+        
+        # 组合硬件信息
         hardware_string = f"{mac}_{disk_serial}_{platform.node()}"
-        return hashlib.sha256(hardware_string.encode()).hexdigest()[:32]
-    except:
+        hardware_id = hashlib.sha256(hardware_string.encode()).hexdigest()[:32]
+        logger.info(f"硬件ID生成成功: {hardware_id}")
+        return hardware_id
+    except Exception as e:
+        logger.error(f"生成硬件ID失败: {e}")
         return "HARDWARE_ERROR"
 
 # ==================== 主应用 ====================
@@ -135,7 +224,7 @@ class UltimateApp(ctk.CTk):
         
         # 窗口配置
         self.title(f"🎯 智能选品系统 · 终极版 {VERSION}")
-        self.geometry("1400x900")
+        self.geometry(f"{Config.WINDOW_WIDTH}x{Config.WINDOW_HEIGHT}")
         self.configure(fg_color=Theme.BG_PRIMARY)
         
         # 数据
@@ -149,8 +238,8 @@ class UltimateApp(ctk.CTk):
         # 自动注册并初始化
         self.auto_register()
     
-    def auto_register(self):
-        """自动注册"""
+    def auto_register(self) -> None:
+        """自动注册并初始化客户端"""
         config = load_config()
         
         if 'client_id' in config:
@@ -163,16 +252,20 @@ class UltimateApp(ctk.CTk):
             # 恢复登录状态
             if config.get('douyin_logged_in', False):
                 self.douyin_logged_in = True
-                print(f"[调试] 从配置文件恢复登录状态: 已登录")
+                logger.info("从配置文件恢复登录状态: 已登录")
             
+            logger.info(f"使用已有客户端ID: {self.client_id}, 激活状态: {self.is_active}")
             self.init_main_ui()
         else:
+            logger.info("首次运行，开始注册客户端")
             try:
                 response = requests.post(
                     f"{SERVER_URL}/api/register",
                     json={'hardware_id': self.hardware_id},
-                    timeout=10
+                    timeout=Config.REGISTER_TIMEOUT
                 )
+                
+                logger.info(f"注册响应状态: {response.status_code}")
                 
                 if response.ok:
                     result = response.json()
@@ -188,13 +281,24 @@ class UltimateApp(ctk.CTk):
                             self.trial_start_time = config['trial_start_time']
                         
                         save_config(config)
+                        logger.info(f"注册成功，客户端ID: {self.client_id}")
                         self.init_main_ui()
                     else:
-                        self.show_error(101, result.get('error', '注册失败'))
+                        error_msg = result.get('error', '注册失败')
+                        logger.error(f"注册失败: {error_msg}")
+                        self.show_error(101, error_msg)
                 else:
+                    logger.error(f"服务器返回错误: {response.status_code}")
                     self.show_error(101, f'服务器错误：{response.status_code}')
             
+            except requests.Timeout:
+                logger.error("注册请求超时")
+                self.show_error(101, '连接服务器超时，请检查网络连接')
+            except requests.RequestException as e:
+                logger.error(f"注册网络异常: {e}")
+                self.show_error(101, f'网络错误：{str(e)}')
             except Exception as e:
+                logger.error(f"注册异常: {e}\n{traceback.format_exc()}")
                 self.show_error(101, f'连接服务器失败：{str(e)}')
     
     def init_main_ui(self):
@@ -253,9 +357,9 @@ class UltimateApp(ctk.CTk):
 
             # 若本地判断试用结束，交由后端接口在需要时返回403+show_popup
             elapsed = time.time() - self.trial_start_time
-            left = TRIAL_DURATION - elapsed
+            left = Config.TRIAL_DURATION - elapsed
             if left > 0:
-                self.after(60000, update)  # 每分钟检查一次
+                self.after(Config.TRIAL_CHECK_INTERVAL, update)  # 定期检查
             # 结束则不做任何本地弹窗动作，由后续 API 调用按后端返回处理
 
         update()
@@ -296,8 +400,11 @@ class UltimateApp(ctk.CTk):
         # 添加间距
         ctk.CTkFrame(menu, height=10, fg_color="transparent").pack()
         
+        # 存储按钮引用以便后续更新
+        self.menu_buttons = {}
         for label, page_id in menus:
-            self.create_menu_btn(menu, label, page_id)
+            btn = self.create_menu_btn(menu, label, page_id)
+            self.menu_buttons[page_id] = btn
     
     def create_menu_btn(self, parent, label, page_id):
         """创建菜单按钮（微信风格）"""
@@ -317,6 +424,7 @@ class UltimateApp(ctk.CTk):
             command=lambda: self.switch_page(page_id)
         )
         btn.pack(fill="x", padx=12, pady=6)
+        return btn
     
     def darken_color(self, hex_color, factor=0.8):
         """使颜色变暗"""
@@ -325,26 +433,29 @@ class UltimateApp(ctk.CTk):
         r, g, b = int(r * factor), int(g * factor), int(b * factor)
         return f'#{r:02x}{g:02x}{b:02x}'
     
-    def switch_page(self, page_id):
-        """切换页面"""
+    def switch_page(self, page_id: str) -> None:
+        """切换页面（优化：不重建菜单，仅更新高亮）"""
         # 去抖：防止重复点击导致状态错乱
         if getattr(self, "_switching", False):
+            logger.debug("页面切换中，忽略重复请求")
             return
+        
+        if self.current_page == page_id:
+            logger.debug(f"已在当前页面: {page_id}")
+            return
+        
         self._switching = True
         try:
+            logger.info(f"切换页面: {self.current_page} -> {page_id}")
+            old_page = self.current_page
             self.current_page = page_id
+            
             # 清空内容区
             for widget in self.content_frame.winfo_children():
                 widget.destroy()
 
-            # 更新左侧菜单高亮（重建菜单）
-            for widget in self.winfo_children():
-                if isinstance(widget, ctk.CTkFrame):
-                    for child in widget.winfo_children():
-                        if isinstance(child, ctk.CTkFrame) and child.cget("width") == 200:
-                            child.destroy()
-                            self.create_left_menu(widget)
-                            break
+            # 优化：只更新菜单按钮状态，不重建整个菜单
+            self.update_menu_highlight()
         finally:
             self._switching = False
         
@@ -357,6 +468,20 @@ class UltimateApp(ctk.CTk):
             self.show_data_analysis()
         elif page_id == "settings":
             self.show_settings()
+    
+    def update_menu_highlight(self) -> None:
+        """更新菜单按钮高亮状态（不重建）"""
+        if not hasattr(self, 'menu_buttons'):
+            return
+        
+        for page_id, btn in self.menu_buttons.items():
+            is_active = (page_id == self.current_page)
+            btn.configure(
+                font=ctk.CTkFont(size=14, weight="bold" if is_active else "normal"),
+                fg_color=Theme.PRIMARY if is_active else "transparent",
+                hover_color=Theme.PRIMARY if not is_active else self.darken_color(Theme.PRIMARY),
+                text_color="white" if is_active else Theme.TEXT_PRIMARY
+            )
     
     # ==================== 页面1：抖音罗盘登录 ====================
     
@@ -403,13 +528,11 @@ class UltimateApp(ctk.CTk):
         # 邮箱
         ctk.CTkLabel(left, text="📧 邮箱账号", font=ctk.CTkFont(size=13)).pack(anchor="w", padx=40, pady=(10,5))
         self.email_entry = ctk.CTkEntry(left, width=400, height=45, font=ctk.CTkFont(size=14), placeholder_text="请输入抖店邮箱")
-        self.email_entry.insert(0, "doudianpuhuo3@163.com")
         self.email_entry.pack(padx=40)
         
         # 密码
         ctk.CTkLabel(left, text="🔑 登录密码", font=ctk.CTkFont(size=13)).pack(anchor="w", padx=40, pady=(20,5))
         self.pwd_entry = ctk.CTkEntry(left, width=400, height=45, show="*", font=ctk.CTkFont(size=14), placeholder_text="请输入密码")
-        self.pwd_entry.insert(0, "Ping99re.com")
         self.pwd_entry.pack(padx=40)
         
         # 开始登录按钮
@@ -505,37 +628,37 @@ class UltimateApp(ctk.CTk):
         # 异步登录
         threading.Thread(target=self._login_thread, args=(email, password), daemon=True).start()
     
-    def _login_thread(self, email, password):
+    def _login_thread(self, email: str, password: str) -> None:
         """登录线程"""
         try:
-            print(f"[调试] 登录线程启动，email={email}")
+            logger.info(f"登录线程启动，email={email}")
             headers = {
                 'X-Client-ID': self.client_id,
                 'X-Hardware-ID': self.hardware_id,
                 'Content-Type': 'application/json'
             }
             
-            print(f"[调试] 准备发送登录请求到 {SERVER_URL}/api/douyin-login-start")
+            logger.info(f"准备发送登录请求到 {SERVER_URL}/api/douyin-login-start")
             # 登录
             response = requests.post(
                 f"{SERVER_URL}/api/douyin-login-start",
                 headers=headers,
                 json={'email': email, 'password': password},
-                timeout=60
+                timeout=Config.LOGIN_TIMEOUT
             )
             
-            print(f"[调试] 收到响应，状态码: {response.status_code}")
+            logger.info(f"收到响应，状态码: {response.status_code}")
             if response.status_code == 403:
                 try:
                     body = response.json()
                     if body.get('show_popup'):
                         self.after(0, self.show_gentle_reminder)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"解析403响应失败: {e}")
                 raise Exception(f"登录失败：{response.status_code}")
             
             result = response.json()
-            print(f"[调试] 响应内容: {result}")
+            logger.info(f"响应内容: {result}")
             if not result.get('success'):
                 raise Exception(result.get('error', '登录失败'))
             
@@ -544,15 +667,32 @@ class UltimateApp(ctk.CTk):
             
             # 验证码处理
             if status == 'need_code':
-                print(f"[调试] 需要验证码")
+                logger.info("需要验证码")
                 self.after(0, lambda: self.douyin_progress_label.configure(text="📧 需要邮箱验证码，请查收..."))
                 
-                code = self.after(0, self.show_code_dialog)
+                # 修复：正确获取验证码输入
+                code_result = {"value": None, "completed": threading.Event()}
+                
+                def show_dialog():
+                    code_result["value"] = self.show_code_dialog()
+                    code_result["completed"].set()
+                
+                self.after(0, show_dialog)
+                
+                # 等待对话框完成
+                if not code_result["completed"].wait(timeout=Config.CODE_INPUT_TIMEOUT):
+                    logger.warning("验证码输入超时")
+                    self.after(0, self._login_cancelled)
+                    return
+                
+                code = code_result["value"]
                 if not code:
+                    logger.info("用户取消输入验证码")
                     self.after(0, self._login_cancelled)
                     return
                 
                 # 提交验证码
+                logger.info(f"提交验证码: {code}")
                 self.after(0, lambda: self.douyin_progress_label.configure(text="🔄 正在提交验证码..."))
                 
                 response = requests.post(
@@ -567,14 +707,12 @@ class UltimateApp(ctk.CTk):
                     raise Exception(result.get('message', '验证码错误'))
             
             # 登录成功
-            print(f"[调试] 登录成功")
+            logger.info("登录成功")
             self.douyin_logged_in = True
             self.after(0, self._login_success)
         
         except Exception as e:
-            print(f"[调试] 登录异常: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"登录异常: {e}\n{traceback.format_exc()}")
             self.after(0, lambda: self._login_failed(str(e)))
     
     def _login_success(self):
@@ -614,9 +752,10 @@ class UltimateApp(ctk.CTk):
         self.douyin_progress_label.configure(text="")
         self.douyin_status_label.configure(text="⭕ 未登录", text_color=Theme.TEXT_SECONDARY)
     
-    def poll_screenshot(self):
+    def poll_screenshot(self) -> None:
         """轮询获取截图（带状态指示）"""
         if not self.screenshot_polling:
+            logger.debug("截图轮询已停止")
             return
 
         def task():
@@ -633,16 +772,17 @@ class UltimateApp(ctk.CTk):
                 response = requests.post(
                     f"{SERVER_URL}/api/douyin-screenshot",
                     headers=headers,
-                    timeout=5
+                    timeout=Config.SCREENSHOT_REQUEST_TIMEOUT
                 )
                 
                 if response.status_code == 403:
+                    logger.warning("截图请求被拒绝（403）")
                     try:
                         body = response.json()
                         if body.get('show_popup'):
                             self.after(0, self.show_gentle_reminder)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.error(f"解析403响应失败: {e}")
                 elif response.ok:
                     result = response.json()
                     if result.get('success') and result.get('screenshot'):
@@ -653,30 +793,43 @@ class UltimateApp(ctk.CTk):
                                 text="✅ 已更新", 
                                 text_color=Theme.GREEN
                             ))
+                else:
+                    logger.warning(f"截图请求失败: {response.status_code}")
                 
-                # 3秒后再次轮询
+                # 定期轮询
                 if self.screenshot_polling:
-                    self.after(3000, self.poll_screenshot)
+                    self.after(Config.SCREENSHOT_POLL_INTERVAL, self.poll_screenshot)
+            except requests.Timeout:
+                logger.warning("截图请求超时")
+                if self.screenshot_polling:
+                    self.after(Config.SCREENSHOT_POLL_INTERVAL, self.poll_screenshot)
             except Exception as e:
-                print(f"[调试] 截图轮询异常: {e}")
-                # 3秒后再次轮询
+                logger.error(f"截图轮询异常: {e}")
                 if self.screenshot_polling:
-                    self.after(3000, self.poll_screenshot)
+                    self.after(Config.SCREENSHOT_POLL_INTERVAL, self.poll_screenshot)
 
         threading.Thread(target=task, daemon=True).start()
     
-    def display_screenshot(self, base64_img):
+    def display_screenshot(self, base64_img: str) -> None:
         """显示截图"""
         try:
             img_data = base64.b64decode(base64_img)
             img = Image.open(BytesIO(img_data))
             
+            # 限制图片大小以防止内存占用过大
+            if img.width > Config.SCREENSHOT_MAX_WIDTH or img.height > Config.SCREENSHOT_MAX_HEIGHT:
+                img.thumbnail((Config.SCREENSHOT_MAX_WIDTH, Config.SCREENSHOT_MAX_HEIGHT), Image.Resampling.LANCZOS)
+            
             ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(img.width, img.height))
             
             self.screenshot_label.configure(image=ctk_img, text="")
             self.screenshot_label.image = ctk_img
-        except:
-            pass
+            logger.debug(f"截图显示成功，尺寸: {img.width}x{img.height}")
+        except Exception as e:
+            logger.error(f"显示截图失败: {e}")
+            # 显示错误提示
+            if hasattr(self, 'screenshot_label'):
+                self.screenshot_label.configure(text="❌ 截图加载失败", image=None)
     
     def show_code_dialog(self):
         """验证码输入对话框"""
@@ -937,9 +1090,10 @@ class UltimateApp(ctk.CTk):
         # 异步执行
         threading.Thread(target=self._selection_thread, daemon=True).start()
     
-    def _selection_thread(self):
+    def _selection_thread(self) -> None:
         """选品线程"""
         try:
+            logger.info("开始智能选品")
             headers = {
                 'X-Client-ID': self.client_id,
                 'X-Hardware-ID': self.hardware_id,
@@ -956,21 +1110,38 @@ class UltimateApp(ctk.CTk):
                 'top_n': int(self.top_n_var.get())
             }
             
+            logger.info(f"选品参数: {data}")
+            
             response = requests.post(
                 f"{SERVER_URL}/api/douyin-scrape",
                 headers=headers,
                 json=data,
-                timeout=120
+                timeout=Config.SCRAPE_TIMEOUT
             )
             
+            logger.info(f"选品响应状态: {response.status_code}")
+            
+            if response.status_code == 403:
+                logger.warning("选品请求被拒绝（403）")
+                try:
+                    body = response.json()
+                    if body.get('show_popup'):
+                        self.after(0, self.show_gentle_reminder)
+                except Exception:
+                    pass
+                raise Exception("授权验证失败，请联系客服")
+            
             if not response.ok:
-                raise Exception(f"请求失败：{response.status_code}")
+                raise Exception(f"请求失败：HTTP {response.status_code}")
             
             result = response.json()
             if not result.get('success'):
-                raise Exception(result.get('error', '爬取失败'))
+                error_msg = result.get('error', '爬取失败')
+                logger.error(f"选品失败: {error_msg}")
+                raise Exception(error_msg)
             
             products = result.get('products', [])
+            logger.info(f"获取到 {len(products)} 个商品")
             
             if not products:
                 self.after(0, lambda: self._selection_failed("未找到符合条件的商品"))
@@ -980,11 +1151,19 @@ class UltimateApp(ctk.CTk):
             self.after(0, lambda: self.selection_progress.configure(text="📊 正在导出Excel..."))
             
             excel_file = self.export_to_excel(products)
+            logger.info(f"Excel导出成功: {excel_file}")
             
             # 成功
             self.after(0, lambda: self._selection_success(products, excel_file))
         
+        except requests.Timeout:
+            logger.error("选品请求超时")
+            self.after(0, lambda: self._selection_failed("请求超时，请稍后重试"))
+        except requests.RequestException as e:
+            logger.error(f"网络请求异常: {e}")
+            self.after(0, lambda: self._selection_failed(f"网络错误：{str(e)}"))
         except Exception as e:
+            logger.error(f"选品异常: {e}\n{traceback.format_exc()}")
             self.after(0, lambda: self._selection_failed(str(e)))
     
     def _selection_success(self, products, excel_file):
@@ -1113,43 +1292,58 @@ class UltimateApp(ctk.CTk):
         self.selection_progress.configure(text="❌ 选品失败")
         messagebox.showerror("选品失败", error)
     
-    def export_to_excel(self, products):
-        """导出Excel"""
-        # 创建DataFrame
-        data = []
-        for idx, p in enumerate(products, 1):
-            data.append({
-                '序号': idx,
-                '排名': p.get('rank', idx),
-                '商品ID': p.get('product_id', ''),
-                '商品名称': p.get('title', ''),
-                '商品链接': p.get('url', ''),
-                '价格': p.get('price', ''),
-                '销量': p.get('sales', ''),
-                'GMV': p.get('gmv', ''),
-                '店铺名称': p.get('shop_name', ''),
-                '是否首次上榜': '是' if p.get('is_first_time') else '否',
-                '增长率': p.get('growth_rate', ''),
-                '商品图片': p.get('image', '')
-            })
+    def export_to_excel(self, products: List[Dict[str, Any]]) -> str:
+        """导出Excel
         
-        df = pd.DataFrame(data)
-        
-        # 生成文件名
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"抖音选品结果_{timestamp}.xlsx"
-        
-        # 保存到桌面
-        desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
-        if not os.path.exists(desktop):
-            desktop = os.path.expanduser('~')
-        
-        filepath = os.path.join(desktop, filename)
-        
-        # 写入Excel
-        df.to_excel(filepath, index=False, engine='openpyxl')
-        
-        return filepath
+        Args:
+            products: 商品列表
+            
+        Returns:
+            str: Excel文件路径
+        """
+        try:
+            logger.info(f"开始导出 {len(products)} 个商品到Excel")
+            
+            # 创建DataFrame
+            data = []
+            for idx, p in enumerate(products, 1):
+                data.append({
+                    '序号': idx,
+                    '排名': p.get('rank', idx),
+                    '商品ID': p.get('product_id', ''),
+                    '商品名称': p.get('title', ''),
+                    '商品链接': p.get('url', ''),
+                    '价格': p.get('price', ''),
+                    '销量': p.get('sales', ''),
+                    'GMV': p.get('gmv', ''),
+                    '店铺名称': p.get('shop_name', ''),
+                    '是否首次上榜': '是' if p.get('is_first_time') else '否',
+                    '增长率': p.get('growth_rate', ''),
+                    '商品图片': p.get('image', '')
+                })
+            
+            df = pd.DataFrame(data)
+            
+            # 生成文件名
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"抖音选品结果_{timestamp}.xlsx"
+            
+            # 保存到桌面
+            desktop = os.path.join(os.path.expanduser('~'), 'Desktop')
+            if not os.path.exists(desktop):
+                logger.warning(f"桌面目录不存在: {desktop}，使用用户目录")
+                desktop = os.path.expanduser('~')
+            
+            filepath = os.path.join(desktop, filename)
+            
+            # 写入Excel
+            df.to_excel(filepath, index=False, engine='openpyxl')
+            
+            logger.info(f"Excel文件导出成功: {filepath}")
+            return filepath
+        except Exception as e:
+            logger.error(f"导出Excel失败: {e}\n{traceback.format_exc()}")
+            raise Exception(f"导出Excel失败: {str(e)}")
     
     # ==================== 其他页面 ====================
     
@@ -1276,7 +1470,7 @@ class UltimateApp(ctk.CTk):
         # 提示文字
         ctk.CTkLabel(
             dialog,
-            text=f"或添加QQ: {CONTACT_QQ}",
+            text=f"或添加QQ: {Config.CONTACT_QQ}",
             font=ctk.CTkFont(size=12),
             text_color=Theme.TEXT_HINT
         ).pack(pady=5)
@@ -1307,13 +1501,37 @@ class UltimateApp(ctk.CTk):
             command=dialog.destroy
         ).pack(side="left", padx=5)
     
-    def show_error(self, error_code, error_msg):
-        """显示错误（友好版，不打断流程）。"""
+    def show_error(self, error_code: int, error_msg: str) -> None:
+        """显示错误提示（友好版，不打断流程）
+        
+        Args:
+            error_code: 错误代码
+            error_msg: 错误消息
+        """
         try:
-            messagebox.showwarning("提示", f"{error_msg or '发生错误'}\n如有疑问请联系客服")
-        except Exception:
-            pass
+            logger.error(f"显示错误 [{error_code}]: {error_msg}")
+            messagebox.showwarning(
+                "提示", 
+                f"{error_msg or '发生错误'}\n\n如有疑问请联系客服"
+            )
+        except Exception as e:
+            logger.error(f"显示错误对话框失败: {e}")
         # 保持当前页面，不强制跳回
+    
+    def show_error_toast(self, title: str, message: str) -> None:
+        """显示Toast风格的错误提示（轻量级）
+        
+        Args:
+            title: 标题
+            message: 消息
+        """
+        logger.warning(f"{title}: {message}")
+        # 这里可以扩展为非模态的Toast通知
+        # 暂时使用messagebox
+        try:
+            messagebox.showinfo(title, message)
+        except Exception as e:
+            logger.error(f"显示Toast失败: {e}")
 
 if __name__ == "__main__":
     app = UltimateApp()

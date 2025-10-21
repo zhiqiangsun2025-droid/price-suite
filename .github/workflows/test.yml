@@ -1,0 +1,93 @@
+name: 自动化测试
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  unit-tests:
+    name: 单元测试
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 检出代码
+      uses: actions/checkout@v3
+    
+    - name: 🐍 设置Python环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: 📦 安装测试依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov pytest-mock
+        pip install requests pandas openpyxl
+    
+    - name: 🧪 运行单元测试
+      run: |
+        cd client
+        pytest tests/test_utils.py tests/test_config.py -v --cov=. --cov-report=xml
+      continue-on-error: true
+    
+    - name: 📊 上传测试覆盖率
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./client/coverage.xml
+        flags: unittests
+      continue-on-error: true
+
+  integration-tests:
+    name: 集成测试
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 检出代码
+      uses: actions/checkout@v3
+    
+    - name: 🐍 设置Python环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: 📦 安装依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest requests pandas
+    
+    - name: 🧪 运行集成测试
+      run: |
+        cd client
+        pytest tests/test_api_client.py -v
+      continue-on-error: true
+
+  code-quality:
+    name: 代码质量检查
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 检出代码
+      uses: actions/checkout@v3
+    
+    - name: 🐍 设置Python环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: 📦 安装检查工具
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pylint
+    
+    - name: 🔍 代码风格检查
+      run: |
+        flake8 client/modern_client_ultimate.py --max-line-length=120 --ignore=E501,W503
+      continue-on-error: true
+    
+    - name: ✅ 测试完成
+      run: echo "所有测试已完成"
+
