@@ -43,10 +43,9 @@ jobs:
       run: |
         cd client
         pyinstaller `
-          --name="智能选品系统-v10.10.5" `
+          --name="智能选品系统-20251021004" `
           --onefile `
           --windowed `
-          --icon=icon.ico `
           --add-data="config_client.json;." `
           --hidden-import=PIL._tkinter_finder `
           --hidden-import=babel.numbers `
@@ -60,7 +59,7 @@ jobs:
         
     - name: 📊 检查文件大小
       run: |
-        $fileSize = (Get-Item "client\dist\智能选品系统-v10.10.5.exe").Length / 1MB
+        $fileSize = (Get-Item "client\dist\智能选品系统-20251021004.exe").Length / 1MB
         Write-Host "EXE文件大小: $([math]::Round($fileSize, 2)) MB"
         if ($fileSize -gt 100) {
           Write-Host "⚠️ 警告: EXE文件过大 (>100MB)"
@@ -68,9 +67,9 @@ jobs:
     
     - name: 🔍 验证EXE文件
       run: |
-        if (Test-Path "client\dist\智能选品系统-v10.10.5.exe") {
+        if (Test-Path "client\dist\智能选品系统-20251021004.exe") {
           Write-Host "✅ EXE文件存在"
-          $hash = Get-FileHash "client\dist\智能选品系统-v10.10.5.exe" -Algorithm SHA256
+          $hash = Get-FileHash "client\dist\智能选品系统-20251021004.exe" -Algorithm SHA256
           Write-Host "SHA256: $($hash.Hash)"
         } else {
           Write-Host "❌ EXE文件不存在"
@@ -80,7 +79,7 @@ jobs:
     - name: ⬆️ 上传构建产物
       uses: actions/upload-artifact@v3
       with:
-        name: 智能选品系统-Windows-v10.10.5
+        name: 智能选品系统-Windows-20251021004
         path: client/dist/*.exe
         retention-days: 30
     
