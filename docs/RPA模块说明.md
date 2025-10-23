@@ -113,11 +113,11 @@ price-suite/
 
 ### 原因2：技术栈差异
 
-| 模块 | 技术 | 环境要求 |
-|------|------|---------|
-| client | CustomTkinter(GUI) | Windows/Mac/Linux |
-| server | Flask(Web) + Selenium | Linux服务器 |
-| rpa | PyAutoGUI(桌面自动化) | **仅Windows本地** |
+| 模块   | 技术                  | 环境要求          |
+| ------ | --------------------- | ----------------- |
+| client | CustomTkinter(GUI)    | Windows/Mac/Linux |
+| server | Flask(Web) + Selenium | Linux服务器       |
+| rpa    | PyAutoGUI(桌面自动化) | **仅Windows本地** |
 
 ### 原因3：部署方式
 
@@ -133,14 +133,14 @@ rpa: 用户本地运行，或打包成独立工具
 
 从截图看到的BAT文件：
 
-| 文件 | 作用 | 状态 | 处理 |
-|------|------|------|------|
-| `build-exe.bat` | 手动打包客户端EXE | ⚠️ 已有GitHub Actions | **移到scripts/windows/** |
-| `install-deps.bat` | Windows安装依赖 | ✅ 有用 | **移到scripts/windows/** |
-| `run-all.bat` | 启动所有服务 | ✅ 有用 | **移到scripts/windows/** |
-| `run-server.bat` | 启动服务器 | ✅ 有用 | **移到scripts/windows/** |
-| `stop-all.bat` | 停止所有服务 | ✅ 有用 | **移到scripts/windows/** |
-| `setup-portable-python.bat` | 配置便携Python | ⚠️ 看情况 | **移到scripts/windows/** |
+| 文件                        | 作用              | 状态                 | 处理                     |
+| --------------------------- | ----------------- | -------------------- | ------------------------ |
+| `build-exe.bat`             | 手动打包客户端EXE | ⚠️ 已有GitHub Actions | **移到scripts/windows/** |
+| `install-deps.bat`          | Windows安装依赖   | ✅ 有用               | **移到scripts/windows/** |
+| `run-all.bat`               | 启动所有服务      | ✅ 有用               | **移到scripts/windows/** |
+| `run-server.bat`            | 启动服务器        | ✅ 有用               | **移到scripts/windows/** |
+| `stop-all.bat`              | 停止所有服务      | ✅ 有用               | **移到scripts/windows/** |
+| `setup-portable-python.bat` | 配置便携Python    | ⚠️ 看情况             | **移到scripts/windows/** |
 
 **处理原则**：
 - 全部移到 `scripts/windows/`
