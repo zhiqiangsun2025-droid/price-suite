@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Windows打包
+    name: Windows打包（集成版）
     runs-on: windows-latest
     
     steps:
@@ -17,26 +17,30 @@ jobs:
       with:
         python-version: '3.11'
     
-    - name: 安装依赖
+    - name: 安装依赖（含RPA）
       run: |
-        pip install customtkinter requests pillow pandas openpyxl cryptography pyinstaller
+        pip install customtkinter requests pillow pandas openpyxl cryptography
+        pip install pyautogui pywinauto opencv-python-headless
+        pip install pyinstaller
     
-    - name: 打包
+    - name: 打包（集成版，含RPA）
       run: |
         cd client
         pyinstaller --onefile --windowed `
-          --name="智能选品系统-20251023001" `
+          --name="智能选品系统-集成版-20251023002" `
           --add-data="config_client.json;." `
           --hidden-import=PIL._tkinter_finder `
           --hidden-import=cryptography `
+          --hidden-import=pyautogui `
+          --hidden-import=cv2 `
           modern_client_ultimate.py
     
     - name: 检查
       run: |
         dir client\dist
-        if (Test-Path "client\dist\智能选品系统-20251023001.exe") {
-          $size = (Get-Item "client\dist\智能选品-20251021007.exe").Length / 1MB
-          Write-Host "✅ 打包成功"
+        if (Test-Path "client\dist\智能选品系统-集成版-20251023002.exe") {
+          $size = (Get-Item "client\dist\智能选品系统-集成版-20251023002.exe").Length / 1MB
+          Write-Host "✅ 打包成功（集成版，含选品+RPA）"
           Write-Host "📦 文件大小: $([math]::Round($size, 2)) MB"
         } else {
           Write-Host "❌ 打包失败"
@@ -45,6 +49,6 @@ jobs:
     
     - uses: actions/upload-artifact@v4
       with:
-        name: 智能选品系统-20251023001
+        name: 智能选品系统-集成版-20251023002
         path: client/dist/*.exe
 
