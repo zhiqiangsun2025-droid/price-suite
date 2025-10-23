@@ -25,7 +25,7 @@ jobs:
       run: |
         cd client
         pyinstaller --onefile --windowed `
-          --name="智能选品-20251021007" `
+          --name="智能选品系统-20251023001" `
           --add-data="config_client.json;." `
           --hidden-import=PIL._tkinter_finder `
           --hidden-import=cryptography `
@@ -34,7 +34,7 @@ jobs:
     - name: 检查
       run: |
         dir client\dist
-        if (Test-Path "client\dist\智能选品-20251021007.exe") {
+        if (Test-Path "client\dist\智能选品系统-20251023001.exe") {
           $size = (Get-Item "client\dist\智能选品-20251021007.exe").Length / 1MB
           Write-Host "✅ 打包成功"
           Write-Host "📦 文件大小: $([math]::Round($size, 2)) MB"
@@ -45,6 +45,6 @@ jobs:
     
     - uses: actions/upload-artifact@v4
       with:
-        name: 智能选品系统-完整版-20251021007
+        name: 智能选品系统-20251023001
         path: client/dist/*.exe
 
