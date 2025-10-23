@@ -4,58 +4,44 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-*.pyc
 venv/
+.venv/
 env/
 ENV/
 
-# PyInstaller
-*.manifest
-*.spec
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-authorization.db
+# 测试覆盖率
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
-# OS
+# 临时文件
+*.log
+*.pid
+*.db
+
+# 打包产物
+dist/
+build/
+*.spec
+*.egg-info/
+
+# 临时压缩包
+*.zip
+!docs/**/*.zip
+
+# 操作系统
 .DS_Store
 Thumbs.db
-desktop.ini
 
-# Logs
-*.log
-logs/
-
-# RPA templates (用户自己截图)
-rpa/templates/*.png
-rpa/templates/*.jpg
-
-# Config
-client_config.json
-
-
-
+# 项目特定
+server/.venv/
+client/venv/
+actions-monitor.log
+server.pid
