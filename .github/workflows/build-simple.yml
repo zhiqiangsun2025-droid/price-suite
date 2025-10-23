@@ -19,25 +19,32 @@ jobs:
     
     - name: 安装依赖
       run: |
-        pip install customtkinter requests pillow pandas openpyxl pyinstaller
+        pip install customtkinter requests pillow pandas openpyxl cryptography pyinstaller
     
     - name: 打包
       run: |
         cd client
-        pyinstaller --onefile --windowed --name="智能选品-20251021006" modern_client_ultimate.py
+        pyinstaller --onefile --windowed `
+          --name="智能选品-20251021007" `
+          --add-data="config_client.json;." `
+          --hidden-import=PIL._tkinter_finder `
+          --hidden-import=cryptography `
+          modern_client_ultimate.py
     
     - name: 检查
       run: |
         dir client\dist
-        if (Test-Path "client\dist\智能选品-20251021006.exe") {
-          Write-Host "✅ 成功"
+        if (Test-Path "client\dist\智能选品-20251021007.exe") {
+          $size = (Get-Item "client\dist\智能选品-20251021007.exe").Length / 1MB
+          Write-Host "✅ 打包成功"
+          Write-Host "📦 文件大小: $([math]::Round($size, 2)) MB"
         } else {
-          Write-Host "❌ 失败"
+          Write-Host "❌ 打包失败"
           exit 1
         }
     
     - uses: actions/upload-artifact@v4
       with:
-        name: exe-20251021006
+        name: 智能选品系统-完整版-20251021007
         path: client/dist/*.exe
 
