@@ -23,11 +23,11 @@ jobs:
         pip install pyautogui pywinauto opencv-python-headless
         pip install pyinstaller
     
-    - name: 打包（集成版，含RPA）
+    - name: 打包集成版（选品+RPA）
       run: |
         cd client
         pyinstaller --onefile --windowed `
-          --name="智能选品系统-集成版-20251023002" `
+          --name="PriceSuite-Full-20251023003" `
           --add-data="config_client.json;." `
           --hidden-import=PIL._tkinter_finder `
           --hidden-import=cryptography `
@@ -38,9 +38,9 @@ jobs:
     - name: 检查
       run: |
         dir client\dist
-        if (Test-Path "client\dist\智能选品系统-集成版-20251023002.exe") {
-          $size = (Get-Item "client\dist\智能选品系统-集成版-20251023002.exe").Length / 1MB
-          Write-Host "✅ 打包成功（集成版，含选品+RPA）"
+        if (Test-Path "client\dist\PriceSuite-Full-20251023003.exe") {
+          $size = (Get-Item "client\dist\PriceSuite-Full-20251023003.exe").Length / 1MB
+          Write-Host "✅ 打包成功（集成版：选品+RPA）"
           Write-Host "📦 文件大小: $([math]::Round($size, 2)) MB"
         } else {
           Write-Host "❌ 打包失败"
@@ -49,6 +49,5 @@ jobs:
     
     - uses: actions/upload-artifact@v4
       with:
-        name: 智能选品系统-集成版-20251023002
+        name: PriceSuite-Full-20251023003
         path: client/dist/*.exe
-
