@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+
+# 测试覆盖率
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 临时文件
+*.log
+*.pid
+*.db
+
+# 打包产物
+dist/
+build/
+*.spec
+*.egg-info/
+
+# 临时压缩包
+*.zip
+!docs/**/*.zip
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 项目特定
+server/.venv/
+client/venv/
+actions-monitor.log
+server.pid

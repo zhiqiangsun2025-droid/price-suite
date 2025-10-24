@@ -1,0 +1,23 @@
+# 服务器必需文件清单
+
+## 核心代码
+server/app.py
+server/douyin_scraper_v2.py
+server/douyin_scraper.py
+server/ai_matcher.py
+server/admin_tool.py
+server/web_auto_listing.py
+server/app_listing_api.py
+server/requirements.txt
+
+## 启动脚本
+server/start.sh
+server/start_server.sh
+
+## 模板（如果有Web管理界面）
+server/templates/
+server/static/
+
+## 配置文件
+.gitignore
+README.md
