@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+{% block title %}客户端管理{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="m-0">📱 客户端管理</h5>
+  <div class="alert alert-info mb-0 py-2 px-3" style="font-size: 13px;">
+    💡 客户端会自动注册，您只需批准或拒绝即可
+  </div>
+</div>
+<form class="row g-2 mb-3" method="get">
+  <div class="col-auto">
+    <input class="form-control" name="q" value="{{ q }}" placeholder="搜索 客户名/ClientID/IP">
+  </div>
+  <div class="col-auto">
+    <button class="btn btn-outline-secondary">搜索</button>
+  </div>
+</form>
+<div class="table-responsive">
+  <table class="table table-hover align-middle" style="min-width: 1400px;">
+    <thead class="table-light">
+      <tr>
+        <th style="width: 40px;">ID</th>
+        <th style="width: 280px;">客户端ID</th>
+        <th style="width: 120px;">客户名称</th>
+        <th style="width: 140px;">IP地址</th>
+        <th style="width: 120px;">硬件ID</th>
+        <th style="width: 100px;">状态</th>
+        <th style="width: 160px;">到期时间</th>
+        <th style="width: 70px;">请求数</th>
+        <th style="width: 180px;">最后访问</th>
+        <th style="min-width: 340px;">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for c in clients %}
+      <tr>
+        <td>{{ c[0] }}</td>
+        <td>
+          <div class="d-flex align-items-center">
+            <code style="font-size: 10px; word-break: break-all; flex: 1; max-width: 220px;">{{ c[1] }}</code>
+            <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyText('{{ c[1] }}'); return false;" title="复制客户端ID">
+              📋
+            </button>
+          </div>
+        </td>
+        <td>{{ c[2] or '-' }}</td>
+        <td><small>{{ c[3] or '任意IP' }}</small></td>
+        <td>
+          <small><code style="font-size: 9px;">{{ c[4][:10] if c[4] else '-' }}...</code></small>
+        </td>
+        <td>
+          {% if c[5] == 0 %}
+            <span class="badge bg-warning text-dark">待审核</span>
+          {% elif c[5] == 1 %}
+            <span class="badge bg-success">已批准</span>
+          {% elif c[5] == -1 %}
+            <span class="badge bg-danger">已拒绝</span>
+          {% else %}
+            <span class="badge bg-secondary">未知</span>
+          {% endif %}
+        </td>
+        <td><small>{{ c[7] if c[7] else '永久' }}</small></td>
+        <td><span class="badge bg-info">{{ c[8] }}</span></td>
+        <td>
+          <small>
+            {% if c[9] %}
+              {{ c[9] }}
+            {% else %}
+              -
+            {% endif %}
+          </small>
+        </td>
+        <td>
+          <!-- 待审核：显示批准/拒绝 -->
+          {% if c[5] == 0 %}
+            <a class="btn btn-sm btn-success me-1" href="{{ url_for('admin_client_approve', cid=c[0]) }}" onclick="return confirm('确认批准该客户端？')">
+              ✓ 批准
+            </a>
+            <a class="btn btn-sm btn-danger me-1" href="{{ url_for('admin_client_reject', cid=c[0]) }}" onclick="return confirm('确认拒绝该客户端？')">
+              ✗ 拒绝
+            </a>
+          {% endif %}
+          
+          <!-- 已批准：显示改为待审核/拒绝 -->
+          {% if c[5] == 1 %}
+            <a class="btn btn-sm btn-warning me-1" href="{{ url_for('admin_client_set_status', cid=c[0], status=0) }}" onclick="return confirm('改为待审核？')">
+              待审核
+            </a>
+            <a class="btn btn-sm btn-danger me-1" href="{{ url_for('admin_client_reject', cid=c[0]) }}" onclick="return confirm('确认拒绝？')">
+              拒绝
+            </a>
+          {% endif %}
+          
+          <!-- 已拒绝：显示改为待审核/批准 -->
+          {% if c[5] == -1 %}
+            <a class="btn btn-sm btn-warning me-1" href="{{ url_for('admin_client_set_status', cid=c[0], status=0) }}" onclick="return confirm('改为待审核？')">
+              待审核
+            </a>
+            <a class="btn btn-sm btn-success me-1" href="{{ url_for('admin_client_approve', cid=c[0]) }}" onclick="return confirm('确认批准？')">
+              ✓ 批准
+            </a>
+          {% endif %}
+          
+          <a class="btn btn-sm btn-outline-secondary me-1" href="{{ url_for('admin_client_edit', cid=c[0]) }}">编辑</a>
+          <a class="btn btn-sm btn-outline-info" href="{{ url_for('admin_logs', client_id=c[1]) }}">日志</a>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+function copyText(text) {
+  // 方案1：使用Clipboard API（需要HTTPS）
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('✓ 已复制客户端ID');
+    }).catch(err => {
+      // 失败，使用方案2
+      fallbackCopy(text);
+    });
+  } else {
+    // 方案2：使用传统方法（兼容HTTP）
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  // 创建临时textarea
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  
+  // 选择并复制
+  textarea.select();
+  textarea.setSelectionRange(0, 99999); // 兼容移动设备
+  
+  let success = false;
+  try {
+    success = document.execCommand('copy');
+  } catch (err) {
+    console.error('复制失败:', err);
+  }
+  
+  document.body.removeChild(textarea);
+  
+  if (success) {
+    showToast('✓ 已复制客户端ID');
+  } else {
+    // 如果还是失败，显示选择框让用户手动复制
+    prompt('复制失败，请手动复制（Ctrl+C）:', text);
+  }
+}
+
+function showToast(message) {
+  const toast = document.createElement('div');
+  toast.className = 'alert alert-success position-fixed top-0 start-50 translate-middle-x mt-3';
+  toast.style.zIndex = '9999';
+  toast.innerHTML = message;
+  document.body.appendChild(toast);
+  
+  setTimeout(() => toast.remove(), 3000);
+}
+</script>
+
+<!-- 错误码说明 -->
+<div class="alert alert-info mt-4">
+  <strong>📋 错误码说明：</strong>
+  <ul class="mb-0 mt-2">
+    <li><code>101</code>: 缺少授权信息</li>
+    <li><code>102</code>: 客户端不存在</li>
+    <li><code>103</code>: 客户端已被拒绝</li>
+    <li><code>104</code>: IP地址未授权</li>
+    <li><code>105</code>: 授权已过期</li>
+  </ul>
+</div>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}事件日志{% endblock %}
+{% block content %}
+<h5 class="mb-3">事件日志</h5>
+<form class="row g-2 mb-3" method="get">
+  <div class="col-auto"><input class="form-control" name="client_id" value="{{ client_id or '' }}" placeholder="ClientID"></div>
+  <div class="col-auto"><input class="form-control" name="action" value="{{ action or '' }}" placeholder="行为"></div>
+  <div class="col-auto"><input class="form-control" name="ip" value="{{ ip or '' }}" placeholder="IP"></div>
+  <div class="col-auto">
+    <select class="form-select" name="success">
+      <option value="" {% if success=='' %}selected{% endif %}>全部</option>
+      <option value="1" {% if success=='1' %}selected{% endif %}>成功</option>
+      <option value="0" {% if success=='0' %}selected{% endif %}>失败</option>
+    </select>
+  </div>
+  <div class="col-auto"><button class="btn btn-outline-secondary">筛选</button></div>
+  <div class="col-auto"><a class="btn btn-outline-danger" href="{{ url_for('admin_events', client_id=client_id, action=action, ip=ip, success=success, delete_before=1) }}" onclick="return confirm('删除30天前事件？不可恢复');">删除30天前</a></div>
+</form>
+<div class="table-responsive">
+  <table class="table table-sm table-striped">
+    <thead>
+      <tr><th>ID</th><th>ClientID</th><th>HardwareID</th><th>IP</th><th>Action</th><th>Detail</th><th>Success</th><th>时间</th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r[0] }}</td>
+        <td class="text-truncate" style="max-width:200px">{{ r[1] }}</td>
+        <td class="text-truncate" style="max-width:160px">{{ r[2] }}</td>
+        <td>{{ r[3] }}</td>
+        <td>{{ r[4] }}</td>
+        <td class="text-truncate" style="max-width:360px">{{ r[5] }}</td>
+        <td>{% if r[6] %}<span class="badge bg-success">Y</span>{% else %}<span class="badge bg-danger">N</span>{% endif %}</td>
+        <td>{{ r[7] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+
+
