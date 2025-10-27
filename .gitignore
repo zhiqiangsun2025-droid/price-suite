@@ -16,78 +16,82 @@ parts/
 sdist/
 var/
 wheels/
-pip-wheel-metadata/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
-# Virtual Environment
+# 虚拟环境
 venv/
 ENV/
 env/
+.venv
 *_venv/
+server/*_venv/
 
-# IDEs
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.DS_Store
 
-# Logs
+# 日志
 *.log
 logs/
-*.pid
+client_debug.log
 
-# Database
+# 数据库
 *.db
 *.sqlite
 *.sqlite3
-authorization.db
 
-# OS
-.DS_Store
-Thumbs.db
+# 配置文件（敏感）
+.env
+*.pem
+*.key
 
-# Test
+# 打包文件
+*.spec
+build/
+dist/
+*.exe
+
+# 测试
 .pytest_cache/
 .coverage
 htmlcov/
 .tox/
 
-# Compiled
-*.pyc
-*.pyo
-__pycache__/
-
-# Secrets
-.env
-*.pem
-*.key
-*.crt
-*credentials*.json
-config_client.json
-
-# Temporary
-*.tmp
-*.temp
+# 备份
+backups/
 *.bak
-*.swp
-nohup.out
-
-# Build
-client/build/
-client/dist/
-*.spec
-
-# Archives
 *.tar.gz
 *.zip
-*.rar
 
-# Server specific
-server_output.log
-app_startup.log
-server.log
+# 临时文件
+*.tmp
+tmp/
+temp/
+%LOCALAPPDATA%/
+
+# PyInstaller
+*.manifest
+
+# Jupyter
+.ipynb_checkpoints
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# RPA截图缓存
+screenshot_*.png
