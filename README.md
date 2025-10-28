@@ -41,11 +41,24 @@ https://price.deepopenai.store/admin/login
 
 **默认密码**: `admin123`
 
+**服务器信息**:
+- 🌍 服务器IP: 82.156.115.97
+- 🔗 Cloudflare Tunnel: invite-platform
+- 🔒 HTTPS: TLS 1.3 (自动配置)
+- ⚡ CDN节点: 8个活跃连接
+- 📊 状态: ✅ 正常运行
+
+**更新记录**:
+- **2025-10-27**: 修复服务器重启问题，添加自动管理脚本
+- **2025-10-26**: Cloudflare Tunnel配置完成，HTTPS正常
+- **2025-10-25**: 生产环境部署上线
+
 **特性**:
 - ✅ 全球CDN加速（Cloudflare）
 - ✅ 自动HTTPS加密
 - ✅ DDoS防护
 - ✅ 高可用部署
+- ✅ 自动重启机制
 
 ---
 
